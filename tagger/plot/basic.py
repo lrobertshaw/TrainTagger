@@ -190,13 +190,79 @@ def pt_correction_hist(pt_ratio, truth_pt_test, reco_pt_test, plot_dir):
     """
 
     plot_histo([truth_pt_test,reco_pt_test,np.multiply(reco_pt_test,pt_ratio)],
-                ['Truth','Reconstructed','NN Predicted'],'',r'$p_T$ [GeV]','a.u',range=(0,300))
+                ['Truth','Reconstructed','NN Predicted'],'',r'$p_T$ [GeV]','a.u',range=(0,400))
     save_path = os.path.join(plot_dir, "pt_hist")
     plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
     plt.savefig(f"{save_path}.png", bbox_inches='tight')
     plt.close()
 
     return
+
+def mass_hist(mass, truth_mass_test, reco_mass, plot_dir):
+    """
+    Plot the histograms of truth mass, regressed mass
+    """
+
+    plot_histo([truth_mass_test,reco_mass, mass],
+                ['Truth', 'Reconstructed', 'NN Predicted'],'',r'$p_T$ [GeV]','a.u',range=(0,1))
+    save_path = os.path.join(plot_dir, "mass_hist")
+    plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
+    plt.savefig(f"{save_path}.png", bbox_inches='tight')
+    plt.close()
+
+    return
+
+def mass_pt_hist(truth_mass_test, truth_pt_test, reco_mass_test, reco_pt_test, mass, pt_ratio, plot_dir):
+    regressed_pt = np.multiply(reco_pt_test, pt_ratio)
+
+    # Create 2D histogram
+    fig, ax = plt.subplots(1, 1, figsize=style.FIGURE_SIZE)
+    hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax, fontsize=style.CMSHEADER_SIZE)
+    
+    h = ax.hist2d(truth_pt_test, truth_mass_test, bins=[50, 50], range=[[0, 400], [0, 1]], cmap='viridis')
+    plt.colorbar(h[3], ax=ax, label='Counts')
+    
+    ax.set_xlabel(r'Truth $p_T$ [GeV]')
+    ax.set_ylabel(r'Truth Mass [GeV]')
+    ax.grid(True)
+    
+    save_path = os.path.join(plot_dir, "truth_mass_vs_truth_pt")
+    plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
+    plt.savefig(f"{save_path}.png", bbox_inches='tight')
+    plt.close()
+
+    # Create 2D histogram for reco_mass_test vs reco_pt_test
+    fig, ax = plt.subplots(1, 1, figsize=style.FIGURE_SIZE)
+    hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax, fontsize=style.CMSHEADER_SIZE)
+    
+    h = ax.hist2d(reco_pt_test, reco_mass_test, bins=[50, 50], range=[[0, 400], [0, 1]], cmap='viridis')
+    plt.colorbar(h[3], ax=ax, label='Counts')
+    
+    ax.set_xlabel(r'Reconstructed $p_T$ [GeV]')
+    ax.set_ylabel(r'Reconstructed Mass [GeV]')
+    ax.grid(True)
+    
+    save_path = os.path.join(plot_dir, "reco_mass_vs_reco_pt")
+    plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
+    plt.savefig(f"{save_path}.png", bbox_inches='tight')
+    plt.close()
+
+    # Create 2D histogram for mass vs regressed_pt
+    fig, ax = plt.subplots(1, 1, figsize=style.FIGURE_SIZE)
+    hep.cms.label(llabel=style.CMSHEADER_LEFT, rlabel=style.CMSHEADER_RIGHT, ax=ax, fontsize=style.CMSHEADER_SIZE)
+    
+    h = ax.hist2d(regressed_pt, mass, bins=[50, 50], range=[[0, 400], [0, 1]], cmap='viridis')
+    plt.colorbar(h[3], ax=ax, label='Counts')
+    
+    ax.set_xlabel(r'Regressed $p_T$ [GeV]')
+    ax.set_ylabel(r'Regressed Mass [GeV]')
+    ax.grid(True)
+    
+    save_path = os.path.join(plot_dir, "mass_vs_regressed_pt")
+    plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
+    plt.savefig(f"{save_path}.png", bbox_inches='tight')
+    plt.close()
+
 
 def plot_input_vars(X_test, input_vars, plot_dir):
 
@@ -214,7 +280,10 @@ def plot_input_vars(X_test, input_vars, plot_dir):
 def get_response(truth_pt, reco_pt, pt_ratio):
 
     #Calculate the regressed pt
-    regressed_pt = np.multiply(reco_pt, pt_ratio)
+    if pt_ratio is None:
+        regressed_pt = reco_pt
+    else:
+        regressed_pt = np.multiply(reco_pt, pt_ratio)
 
     #to calculate response
     uncorrected_response = []
@@ -284,6 +353,8 @@ def response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_d
     uncorrected_response, regressed_response, uncorrected_errors, regressed_errors = get_response(truth_pt_test, reco_pt_test, pt_ratio)
     plot_response(uncorrected_response, regressed_response, uncorrected_errors, regressed_errors, flavor='inclusive', plot_name="inclusive_response")
 
+    if class_labels is None:
+        return
     #Flavor-wise response
     for flavor in class_labels.keys():
         idx = class_labels[flavor]
@@ -383,6 +454,9 @@ def rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir):
     uncorrected_rms, regressed_rms, uncorrected_rms_err, regressed_rms_err = get_rms(truth_pt_test, reco_pt_test, pt_ratio)
     plot_rms(uncorrected_rms, regressed_rms, uncorrected_rms_err, regressed_rms_err, flavor='inclusive', plot_name='inclusive')
 
+    if class_labels is None:
+        return
+
     #Flavor-wise rms
     for flavor in class_labels.keys():
         idx = class_labels[flavor]
@@ -405,6 +479,159 @@ def rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir):
         plot_rms(uncorrected_rms, regressed_rms, uncorrected_rms_err, regressed_rms_err, flavor=key, plot_name=f"{key}_rms")
 
     return
+
+def response_mass(truth_mass_test, mass, reco_mass, plot_dir):
+    save_dir = os.path.join(plot_dir, 'response')
+    os.makedirs(save_dir, exist_ok=True)
+
+    # mass coordinate points for plotting
+    mass_bins = np.linspace(0,1,10)
+    mass_points = [np.mean((mass_bins[i], mass_bins[i + 1])) for i in range(len(mass_bins) - 1)]
+
+    def plot_mass_response(regressed_response, reco_response, regressed_errors, reco_errors, plot_name):
+
+        # Plot the response
+        fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+        hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.CMSHEADER_SIZE)
+        ax.errorbar(mass_points, reco_response, yerr=reco_errors, fmt='o', label=f"Reco mass", capsize=4,ms=8,elinewidth=3)
+        print (mass_points)
+        print (regressed_response)
+        print (regressed_errors)
+        ax.errorbar(mass_points, regressed_response, yerr=regressed_errors, fmt='o', label="Regressed mass", capsize=4,ms=8,elinewidth=3)
+
+        ax.set_xlabel(r"Gen jet mass [GeV]")
+        ax.set_ylabel("Response (Reco/Gen)")
+        ax.legend()
+        ax.grid()
+
+        # Save the plot
+        save_path = os.path.join(save_dir, plot_name)
+        plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
+        plt.savefig(f"{save_path}.png", bbox_inches='tight')
+        plt.close()
+
+    def get_mass_response(truth_mass, regressed_mass, reco_mass):
+        print (truth_mass)
+        print (regressed_mass)
+        print (reco_mass)
+        #to calculate response
+        reco_response = []
+        regressed_response = []
+        reco_errors = []
+        regressed_errors = []
+
+        # Loop over the mass ranges
+        for i in range(len(mass_bins) - 1):
+            mass_min = mass_bins[i]
+            mass_max = mass_bins[i + 1]
+
+            selection = (truth_mass > mass_min) & (truth_mass < mass_max)
+
+            # Compute responses
+            reco_response_bin = reco_mass[selection] / truth_mass[selection]
+            regressed_response_bin = regressed_mass[selection] / truth_mass[selection]
+
+            # Append the mean response
+            reco_response.append(np.mean(reco_response_bin))
+            regressed_response.append(np.mean(regressed_response_bin))
+
+            # Compute the standard deviation and uncertainty in the mean
+            n_events = len(truth_mass[selection])
+
+            if n_events > 0:
+                reco_std = np.std(reco_response_bin)
+                regressed_std = np.std(regressed_response_bin)
+
+                reco_errors.append(reco_std/np.sqrt(n_events))
+                regressed_errors.append(regressed_std/np.sqrt(n_events))
+            else:
+                # No events in bin
+                reco_errors.append(0)
+                regressed_errors.append(0)
+
+        return reco_response, regressed_response, reco_errors, regressed_errors
+
+
+    # Inclusive response
+    reco_response, regressed_response, reco_errors, regressed_errors = get_mass_response(truth_mass_test, mass, reco_mass )
+    print (regressed_response)
+    print (regressed_errors)
+    plot_mass_response(regressed_response, reco_response, regressed_errors, reco_errors, plot_name="inclusive_mass_response")
+
+def rms_mass(truth_mass_test, mass, reco_mass_test, plot_dir):
+
+    save_dir = os.path.join(plot_dir, 'residual_rms')
+    os.makedirs(save_dir, exist_ok=True)
+
+    # mass coordinate points for plotting
+    mass_bins = np.linspace(0,1,10)
+    mass_points = [np.mean((mass_bins[i], mass_bins[i + 1])) for i in range(len(mass_bins) - 1)]
+
+    def plot_mass_rms(regressed_rms, reco_rms, regressed_rms_errors, reco_rms_errors, plot_name):
+
+        # Plot the response
+        fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
+        hep.cms.label(llabel=style.CMSHEADER_LEFT,rlabel=style.CMSHEADER_RIGHT,ax=ax,fontsize=style.CMSHEADER_SIZE)
+        ax.errorbar(mass_points, reco_rms, yerr=reco_rms_errors, fmt='o', label=("Uncorrected $\sigma$- inclusive"), capsize=4,ms=8,elinewidth=3)
+        ax.errorbar(mass_points, regressed_rms, yerr=regressed_rms_errors, fmt='o', label=("Regressed $\sigma$ - inclusive"), capsize=4,ms=8,elinewidth=3)
+
+        ax.set_xlabel(r"Gen jet mass [GeV]")
+        ax.set_ylabel(r"$\sigma_{(Gen jet mass - reco jet mass)/Gen jet mass}$")
+        ax.legend()
+        ax.grid(True)
+
+        # Save the plot
+        save_path = os.path.join(save_dir, plot_name)
+        plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
+        plt.savefig(f"{save_path}.png", bbox_inches='tight')
+        plt.close()
+
+    def get_mass_rms(truth_mass, mass, reco_mass):
+
+        #Get the residuals
+        reco_res = reco_mass - truth_mass
+        regressed_res = mass - truth_mass
+
+        rms_reco = []
+        rms_reg = []
+        rms_reco_err = []
+        rms_reg_err = []
+
+        # Loop over the pT ranges
+        for i in range(len(mass_bins) - 1):
+            mass_min = mass_bins[i]
+            mass_max = mass_bins[i + 1]
+            mass_avg = np.mean((mass_min, mass_max))
+
+            selection = (truth_mass > mass_min) & (truth_mass < mass_max)
+
+            # Fit a Gaussian to the residuals and extract the standard deviation
+            mu_reco, sigma_reco = norm.fit(reco_res[selection]/mass_avg)
+            mu_reg, sigma_reg = norm.fit(regressed_res[selection]/mass_avg)
+
+            # Get the errors for the standard deviation
+            # Standard error of the standard deviation for a normal distribution
+            n_reco = len(reco_res[selection])
+            n_reg = len(regressed_res[selection])
+
+            if n_reco <= 1 or n_reg <= 1:
+                sigma_reco_err = sigma_reco
+                sigma_reg_err = sigma_reg
+            else:
+                sigma_reco_err = sigma_reco / np.sqrt(2 * (n_reco - 1))
+                sigma_reg_err = sigma_reg / np.sqrt(2 * (n_reg - 1))
+
+            rms_reco.append(sigma_reco)
+            rms_reg.append(sigma_reg)
+            rms_reco_err.append(sigma_reco_err)
+            rms_reg_err.append(sigma_reg_err)
+
+        return rms_reco, rms_reg, rms_reco_err, rms_reg_err
+
+    #Inclusive rms
+    reco_rms, regressed_rms, reco_rms_error, regressed_rms_err = get_mass_rms(truth_mass_test, mass, reco_mass_test)
+    plot_mass_rms(regressed_rms, reco_rms, regressed_rms_err, reco_rms_error, plot_name='inclusive')
+
 
 def shapPlot(shap_values, feature_names, class_names):
     fig,ax = plt.subplots(1,1,figsize=style.FIGURE_SIZE)
@@ -516,7 +743,7 @@ def basic(model_dir):
     plot_input_vars(X_test, input_vars, plot_dir)
 
     #Plot inclusive response and individual flavor
-    response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
+    response([class_labels], y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
     
     #Plot the rms of the residuals vs pt
     rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
@@ -525,3 +752,50 @@ def basic(model_dir):
     plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
 
     return ROC_dict
+
+def basic_mass(model_dir):
+    """
+    Plot pt and mass regression
+    """
+    
+    plot_dir = os.path.join(model_dir, "plots/training")
+
+    #Load the metada for class_label
+    with open(f"{model_dir}/class_label.json", 'r') as file: class_labels = json.load(file)
+    with open(f"{model_dir}/input_vars.json", 'r') as file: input_vars = json.load(file)
+
+    #Load the testing data
+    X_test = np.load(f"{model_dir}/testing_data/X_test.npy")
+    truth_pt_test = np.load(f"{model_dir}/testing_data/truth_pt_test.npy")
+    reco_pt_test = np.load(f"{model_dir}/testing_data/reco_pt_test.npy")
+    truth_mass_test = np.load(f"{model_dir}/testing_data/truth_mass_test.npy")
+    reco_mass_test = np.load(f"{model_dir}/testing_data/reco_mass_test.npy")
+    
+    #Load model
+    model = load_qmodel(f"{model_dir}/model/saved_model.h5")
+    model_outputs = model.predict(X_test)
+
+    #Get classification outputs
+    pt_ratio = model_outputs[0].flatten()
+    mass = model_outputs[1].flatten()
+    
+    #Plot pt corrections
+    pt_correction_hist(pt_ratio, truth_pt_test, reco_pt_test, plot_dir)
+
+    mass_hist(mass, truth_mass_test, reco_mass_test, plot_dir)
+
+    mass_pt_hist(truth_mass_test, truth_pt_test, reco_mass_test, reco_pt_test, mass, pt_ratio, plot_dir)
+
+    #Plot input distributions
+    plot_input_vars(X_test, input_vars, plot_dir)
+
+    #Plot inclusive response and individual flavor
+    response_mass(truth_mass_test, mass, reco_mass_test, plot_dir)
+    
+    #Plot the rms of the residuals vs pt
+    rms_mass(truth_mass_test, mass, reco_mass_test, plot_dir)
+    
+    #Plot the shaply feature importance
+    plot_shaply(model, X_test, class_labels, input_vars, plot_dir)
+
+    return None

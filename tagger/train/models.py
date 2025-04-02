@@ -39,15 +39,15 @@ def baseline(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1):
 
     #Now split into jet ID and pt regression
 
-    #jetID branch, 3 layer MLP
-    jet_id = QDense(32, name='Dense_1_jetID', **common_args)(main)
-    jet_id = QActivation(activation=quantized_relu(bits), name='relu_1_jetID')(jet_id)
+    # #jetID branch, 3 layer MLP
+    # jet_id = QDense(32, name='Dense_1_jetID', **common_args)(main)
+    # jet_id = QActivation(activation=quantized_relu(bits), name='relu_1_jetID')(jet_id)
 
-    jet_id = QDense(16, name='Dense_2_jetID', **common_args)(jet_id)
-    jet_id = QActivation(activation=quantized_relu(bits), name='relu_2_jetID')(jet_id)
+    # jet_id = QDense(16, name='Dense_2_jetID', **common_args)(jet_id)
+    # jet_id = QActivation(activation=quantized_relu(bits), name='relu_2_jetID')(jet_id)
 
-    jet_id = QDense(output_shape[0], name='Dense_3_jetID', **common_args)(jet_id)
-    jet_id = Activation('softmax', name='jet_id_output')(jet_id)
+    # jet_id = QDense(output_shape[0], name='Dense_3_jetID', **common_args)(jet_id)
+    # jet_id = Activation('softmax', name='jet_id_output')(jet_id)
 
     #pT regression branch
     pt_regress = QDense(10, name='Dense_1_pT', **common_args)(main)
@@ -58,8 +58,18 @@ def baseline(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1):
                         bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
                         kernel_initializer='lecun_uniform')(pt_regress)
 
+    #mass regression branch
+    mass_regress = QDense(10, name='Dense_1_mass', **common_args)(main)
+    mass_regress = QActivation(activation=quantized_relu(bits), name='relu_1_mass')(mass_regress)
+
+    mass_regress = QDense(1, name='mass_output',
+                        kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
+                        bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
+                        kernel_initializer='lecun_uniform')(mass_regress)
+
+
     #Define the model using both branches
-    model = tf.keras.Model(inputs = inputs, outputs = [jet_id, pt_regress])
+    model = tf.keras.Model(inputs = inputs, outputs = [pt_regress, mass_regress])
 
     print(model.summary())
 

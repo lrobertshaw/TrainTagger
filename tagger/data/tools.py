@@ -6,7 +6,7 @@ import numpy as np
 import awkward as ak
 import tensorflow as tf
 import uproot, yaml
-
+from math import pi
 # Dataset configuration
 from .config import FILTER_PATTERN, N_PARTICLES, INPUT_TAG, EXTRA_FIELDS
 
@@ -114,16 +114,21 @@ def _split_flavor(data):
     data['target_pt'] = np.clip(hadrons * hadron_pt_ratio + leptons * lepton_pt_ratio, 0.3, 2)
     data['target_pt_phys'] = hadrons * hadron_pt + leptons*lepton_pt
 
+    mass = ak.nan_to_num(data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0)
+    scaled_mass = (np.clip(mass, 10, 130) - 10) / (130 - 10)
+    data['target_mass'] = scaled_mass
+
     # Apply pt_cut
     jet_ptmin_gen = (data['target_pt_phys'] > 5.)
-    for key in conditions: conditions[key] = conditions[key] & jet_ptmin_gen
+    jet_massmin_gen = (data['target_mass'] > 0.)
+    for key in conditions: conditions[key] = conditions[key] & jet_ptmin_gen & jet_massmin_gen
 
     # Sanity check for data consistency
     split_data_sum = sum(sum(conditions[label]) for label, condition in conditions.items())
-    if split_data_sum != len(data[jet_ptmin_gen]):
-        raise ValueError(f"Data splitting error: Total entries ({split_data_sum}) do not match the filtered data length ({len(data[jet_ptmin_gen])}).")
+    if split_data_sum != len(data[jet_ptmin_gen & jet_massmin_gen]):
+        raise ValueError(f"Data splitting error: Total entries ({split_data_sum}) do not match the filtered data length ({len(data[jet_ptmin_gen & jet_massmin_gen])}).")
 
-    return data[jet_ptmin_gen], class_labels
+    return data[jet_ptmin_gen & jet_massmin_gen], class_labels
 
 def _get_pfcand_fields(tag):
     
@@ -210,8 +215,33 @@ def _process_chunk(data_split, tag, extras, n_parts, chunk, outdir):
     _make_nn_inputs(data_split, tag, n_parts)
     extra_features = _get_pfcand_fields(extras)
 
+    # Calculate pt, deta, and dphi for the candidates
+    pt = data_split["jet_pfcand"]["pt"]
+    deta = data_split["jet_pfcand"]["deta"]
+    dphi = data_split["jet_pfcand"]["dphi"]
+    # Calculate jet mass from pt, deta, and dphi
+    px = np.sum(pt * np.cos(dphi*pi/720), axis=1)
+    py = np.sum(pt * np.sin(dphi*pi/720), axis=1)
+    pz = np.sum(pt * np.sinh(deta*pi/720), axis=1)
+    energy = np.sum(pt * np.cosh(deta*pi/720), axis=1)
+    print (pt)
+    print (dphi)
+    print (deta)
+    print (px)
+    print (py)
+    print (pz)
+    print (energy)
+    mass = np.sqrt(np.maximum(energy**2 - (px**2 + py**2 + pz**2), 0))
+    print (mass)
+    scaled_mass_phys = (np.clip(mass, 10, 130) - 10) / (130 - 10)
+
+    data_split['target_mass_phys'] = scaled_mass_phys
+    print (len(data_split['target_mass_phys']), data_split['target_mass_phys'])
+    print (len(data_split['target_mass']), data_split['target_mass'])
     #Save them to a root file
-    save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys'] + extra_features
+    save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features
+
+    print (data_split.fields)
 
     # Filter the data_split to only include save_fields
     filtered_data = {field: data_split[field] for field in save_fields}
@@ -285,14 +315,18 @@ def to_ML(data, class_labels):
     """
     Take in the data from make_data (loaded by load_data) and make them ready for training.
     """
-
+    print (data.fields)
+    print (data['target_mass'])
+    print (data['target_mass_phys'])
     X = np.asarray(data['nn_inputs'])
     y = tf.keras.utils.to_categorical(np.asarray(data['class_label']), num_classes=len(class_labels))
     pt_target = np.asarray(data['target_pt'])
+    mass_target = np.asarray(data['target_mass'])
+    mass_reco = np.asarray(data['target_mass_phys'])
     truth_pt = np.asarray(data['target_pt_phys'])
     reco_pt = np.asarray(data['jet_pt_phys'])
 
-    return X, y, pt_target, truth_pt, reco_pt
+    return X, y, pt_target, mass_target, mass_reco, truth_pt, reco_pt
 
 def load_data(outdir, percentage, test_ratio=0.1, fields=None):
     """
@@ -385,6 +419,7 @@ def make_data(infile='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_
     print("Output directory:", outdir)
 
     #Loop through the entries
+    print (uproot.open(infile).keys())
     num_entries = uproot.open(infile)[tree].num_entries
     num_entries_done = 0
     chunk = 0

@@ -3,7 +3,7 @@ import os, shutil, json
 
 #Import from other modules
 from tagger.data.tools import make_data, load_data, to_ML
-from tagger.plot.basic import loss_history, basic
+from tagger.plot.basic import loss_history, basic, basic_mass
 import models
 
 #Third parties
@@ -30,7 +30,7 @@ tf.config.threading.set_intra_op_parallelism_threads(
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
 tf.keras.utils.set_random_seed(420) #not a special number 
 BATCH_SIZE = 1024
-EPOCHS = 100
+EPOCHS = 200
 VALIDATION_SPLIT = 0.1 # 10% of training set will be used for validation set. 
 
 # Sparsity parameters
@@ -52,15 +52,18 @@ def prune_model(model, num_samples):
     pruned_model = tfmot.sparsity.keras.prune_low_magnitude(model, **pruning_params)
 
     pruned_model.compile(optimizer='adam',
-                            loss={'prune_low_magnitude_jet_id_output': 'categorical_crossentropy', 'prune_low_magnitude_pT_output': tf.keras.losses.Huber()},
-                            metrics = {'prune_low_magnitude_jet_id_output': 'categorical_accuracy', 'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error']},
-                            weighted_metrics = {'prune_low_magnitude_jet_id_output': 'categorical_accuracy', 'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error']})
+                            # loss={'prune_low_magnitude_jet_id_output': 'categorical_crossentropy', 'prune_low_magnitude_pT_output': tf.keras.losses.Huber(), 'prune_low_magnitude_mass_output': tf.keras.losses.Huber()},
+                            # metrics = {'prune_low_magnitude_jet_id_output': 'categorical_accuracy', 'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error']},
+                            # weighted_metrics = {'prune_low_magnitude_jet_id_output': 'categorical_accuracy', 'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error']})
+                            loss={'prune_low_magnitude_pT_output': tf.keras.losses.Huber(), 'prune_low_magnitude_mass_output': tf.keras.losses.Huber()},
+                            metrics = {'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'], 'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']},
+                            weighted_metrics = {'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'], 'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']})
 
     print(pruned_model.summary())
 
     return pruned_model
 
-def save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, class_labels):
+def save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, class_labels):
 
     os.makedirs(os.path.join(out_dir,'testing_data'), exist_ok=True)
 
@@ -68,6 +71,8 @@ def save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, class_l
     np.save(os.path.join(out_dir, "testing_data/y_test.npy"), y_test)
     np.save(os.path.join(out_dir, "testing_data/truth_pt_test.npy"), truth_pt_test)
     np.save(os.path.join(out_dir, "testing_data/reco_pt_test.npy"), reco_pt_test)
+    np.save(os.path.join(out_dir, "testing_data/truth_mass_test.npy"), truth_mass_test)
+    np.save(os.path.join(out_dir, "testing_data/reco_mass_test.npy"), reco_mass_test)
     with open(os.path.join(out_dir, "class_label.json"), "w") as f: json.dump(class_labels, f, indent=4) #Dump output variables
 
     print(f"Test data saved to {out_dir}")
@@ -143,11 +148,11 @@ def train(out_dir, percent, model_name):
     with open(os.path.join(out_dir, "extra_vars.json"), "w") as f: json.dump(extra_vars, f, indent=4) #Dump output variables
 
     #Make into ML-like data for training
-    X_train, y_train, pt_target_train, truth_pt_train, reco_pt_train = to_ML(data_train, class_labels)
+    X_train, y_train, pt_target_train, mass_target_train, reco_mass_train, truth_pt_train, reco_pt_train = to_ML(data_train, class_labels)
 
     #Save X_test, y_test, and truth_pt_test for plotting later
-    X_test, y_test, _, truth_pt_test, reco_pt_test = to_ML(data_test, class_labels)
-    save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, class_labels)
+    X_test, y_test, _, mass_target_test, reco_mass_test, truth_pt_test, reco_pt_test = to_ML(data_test, class_labels)
+    save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, mass_target_test, reco_mass_test, class_labels)
 
     #Calculate the sample weights for training
     sample_weight = train_weights(y_train, truth_pt_train, class_labels)
@@ -173,7 +178,7 @@ def train(out_dir, percent, model_name):
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
 
     history = pruned_model.fit({'model_input': X_train},
-                            {'prune_low_magnitude_jet_id_output': y_train, 'prune_low_magnitude_pT_output': pt_target_train},
+                            {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': mass_target_train},
                             sample_weight=sample_weight,
                             epochs=EPOCHS,
                             batch_size=BATCH_SIZE,
@@ -218,6 +223,7 @@ if __name__ == "__main__":
 
     #Basic ploting
     parser.add_argument('--plot-basic', action='store_true', help='Plot all the basic performance if set')
+    parser.add_argument('--plot-mass', action='store_true', help='Plot all the basic performance if set for mass stuff')
 
     args = parser.parse_args()
 
@@ -240,7 +246,18 @@ if __name__ == "__main__":
             results = basic(model_dir)
             for class_label in results.keys():
                 mlflow.log_metric(class_label + ' ROC AUC',results[class_label])
-            
+    elif args.plot_mass:
+        model_dir = args.output
+        f = open("mlflow_run_id.txt", "r")
+        run_id = (f.read())
+        mlflow.get_experiment_by_name(os.getenv('CI_COMMIT_REF_NAME'))
+        with mlflow.start_run(experiment_id=1,
+                            run_name=args.name,
+                            run_id=run_id # pass None to start a new run
+                            ):
+
+            #All the basic plots!
+            basic_mass(model_dir)
     else:
         with mlflow.start_run(run_name=args.name) as run:
             mlflow.set_tag('gitlab.CI_JOB_ID', os.getenv('CI_JOB_ID'))
