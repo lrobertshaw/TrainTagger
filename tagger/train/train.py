@@ -214,7 +214,7 @@ if __name__ == "__main__":
     parser.add_argument('-p','--percent', default=100, type=int, help = 'Percentage of how much processed data to train on')
     parser.add_argument('-m','--model', default='baseline', help = 'Model object name to train on')
     parser.add_argument('-n','--name', default='baseline', help = 'Model experiment name')
-    parser.add_argument('-t','--tree', default='outnano/jets', help = 'Tree within the ntuple containing the jets')
+    parser.add_argument('-t','--tree', default='jetntuple/Jets', help = 'Tree within the ntuple containing the jets')
 
     #Basic ploting
     parser.add_argument('--plot-basic', action='store_true', help='Plot all the basic performance if set')

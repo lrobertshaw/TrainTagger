@@ -72,6 +72,8 @@ pfcand_fields_all:
   - jet_SC4NGJet_score_regression
   - jet_pt_phys
   - jet_genmatch_pt
+  - jet_mass
+  - jet_genmatch_mass
 
 baseline_hardware_inputs:
   - pt
@@ -98,6 +100,8 @@ baseline_hardware_inputs:
 extra_fields:
   - jet_pt_phys
   - jet_genmatch_pt
+  - jet_mass
+  - jet_genmatch_mass
 
 extra_emulation_fields:
   - jet_SC4NGJet_score_b
@@ -111,3 +115,5 @@ extra_emulation_fields:
   - jet_SC4NGJet_score_regression
   - jet_pt_phys
   - jet_genmatch_pt
+  - jet_mass
+  - jet_genmatch_mass

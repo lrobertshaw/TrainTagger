@@ -29,7 +29,7 @@ def _split_flavor(data):
         dict: A dictionary containing the split data by label.
     """
 
-    genmatch_pt_base = data['jet_genmatch_pt'] > 0
+    genmatch_pt_base = data['jet_genmatch_pt'] > 0    # Only jets matched to a gen jet
 
     # Define conditions for each label
     conditions = {
@@ -105,17 +105,27 @@ def _split_flavor(data):
     hadrons = (conditions["b"] | conditions["charm"] | conditions["light"] | conditions["gluon"])
     leptons = (conditions["taup"] | conditions["taum"] | conditions["muon"] | conditions["electron"])
 
-    hadron_pt_ratio = ak.nan_to_num(data["jet_genmatch_pt"]/data["jet_pt_phys"], nan=0, posinf=0, neginf=0)
-    lepton_pt_ratio = ak.nan_to_num((data["jet_genmatch_lep_vis_pt"]/data["jet_pt_phys"]),nan=0,posinf=0,neginf=0)
+    hadron_pt_ratio = ak.nan_to_num( data["jet_genmatch_pt"] / data["jet_pt_phys"], nan=0, posinf=0, neginf=0)
+    lepton_pt_ratio = ak.nan_to_num( data["jet_genmatch_lep_vis_pt"] / data["jet_pt_phys"],nan=0, posinf=0,neginf=0)
 
-    hadron_pt = ak.nan_to_num(data["jet_genmatch_pt"],nan=0,posinf=0,neginf=0)
-    lepton_pt = ak.nan_to_num((data["jet_genmatch_lep_vis_pt"]),nan=0,posinf=0,neginf=0)
+    hadron_pt = ak.nan_to_num( data["jet_genmatch_pt"], nan=0, posinf=0, neginf=0 )
+    lepton_pt = ak.nan_to_num( data["jet_genmatch_lep_vis_pt"], nan=0, posinf=0, neginf=0 )
 
     data['target_pt'] = np.clip(hadrons * hadron_pt_ratio + leptons * lepton_pt_ratio, 0.3, 2)
-    data['target_pt_phys'] = hadrons * hadron_pt + leptons*lepton_pt
+    data['target_pt_phys'] = (hadrons * hadron_pt) + (leptons * lepton_pt)
+
+    # Set mass regression target
+    hadron_mass_ratio = ak.nan_to_num(data["jet_genmatch_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
+    # lepton_mass_ratio = ak.nan_to_num(data["jet_genmatch_lep_vis_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
+
+    hadron_mass = ak.nan_to_num(data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0)
+    # lepton_mass = ak.nan_to_num(data["jet_genmatch_lep_vis_mass"], nan=0, posinf=0, neginf=0)
+
+    data['target_mass'] = np.clip(hadrons * hadron_mass_ratio, 0.3, 2)
+    data['target_mass_phys'] = (hadrons * hadron_mass)
 
     # Apply pt_cut
-    jet_ptmin_gen = (data['target_pt_phys'] > 5.)
+    jet_ptmin_gen = (data['target_pt_phys'] > 5.0)
     for key in conditions: conditions[key] = conditions[key] & jet_ptmin_gen
 
     # Sanity check for data consistency
@@ -211,7 +221,7 @@ def _process_chunk(data_split, tag, extras, n_parts, chunk, outdir):
     extra_features = _get_pfcand_fields(extras)
 
     #Save them to a root file
-    save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys'] + extra_features
+    save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features
 
     # Filter the data_split to only include save_fields
     filtered_data = {field: data_split[field] for field in save_fields}
@@ -356,7 +366,7 @@ def make_data(infile='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_
               n_parts=N_PARTICLES,
               ratio=1.0,
               step_size="100MB",
-              tree="outnano/jets"):
+              tree="jetntuple/Jets"):
     """
     Process the data set in chunks from the input ntuples file.
 
