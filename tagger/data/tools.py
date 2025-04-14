@@ -115,25 +115,20 @@ def _split_flavor(data):
     data['target_pt_phys'] = (hadrons * hadron_pt) + (leptons * lepton_pt)
 
     # Set mass regression target
-    # hadron_mass_ratio = ak.nan_to_num(data["jet_genmatch_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
-    # lepton_mass_ratio = ak.nan_to_num(data["jet_genmatch_lep_vis_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
+    mass = ak.nan_to_num(data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0)
+    scaled_mass = (np.clip(mass, 8, 128) - 8) / (128 - 8)
+    data['target_mass'] = scaled_mass
 
-    hadron_mass = ak.nan_to_num(data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0)
-    # lepton_mass = ak.nan_to_num(data["jet_genmatch_lep_vis_mass"], nan=0, posinf=0, neginf=0)
-
-    # data['target_mass'] = np.clip(hadrons * hadron_mass_ratio, 0.3, 2)
-    data['target_mass'] = (hadrons * hadron_mass)
-
-    # Apply pt_cut
-    jet_ptmin_gen = (data['target_pt_phys'] > 5.0)
-    for key in conditions: conditions[key] = conditions[key] & jet_ptmin_gen
+    # Apply pt_cut and mass_cut
+    jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 5.0), (data['target_mass'] > 0.)
+    for key in conditions: conditions[key] = conditions[key] & jet_ptmin_gen & jet_massmin_gen
 
     # Sanity check for data consistency
     split_data_sum = sum(sum(conditions[label]) for label, condition in conditions.items())
-    if split_data_sum != len(data[jet_ptmin_gen]):
-        raise ValueError(f"Data splitting error: Total entries ({split_data_sum}) do not match the filtered data length ({len(data[jet_ptmin_gen])}).")
+    if split_data_sum != len(data[jet_ptmin_gen & jet_massmin_gen]):
+        raise ValueError(f"Data splitting error: Total entries ({split_data_sum}) do not match the filtered data length ({len(data[jet_ptmin_gen & jet_massmin_gen])}).")
 
-    return data[jet_ptmin_gen], class_labels
+    return data[jet_ptmin_gen & jet_massmin_gen], class_labels
 
 def _get_pfcand_fields(tag):
     
@@ -168,7 +163,7 @@ def _make_nn_inputs(data_split, tag, n_parts):
         field_array = data_split["jet_pfcand"][field]
 
         padded_filled_array = _pad_fill(field_array, n_parts)
-        inputs_list.append(padded_filled_array[:,:,np.newaxis])
+        inputs_list.append(padded_filled_array[:, :, np.newaxis])
 
     #batch_size, n_particles, n_features
     inputs = ak.concatenate(inputs_list, axis=2)
@@ -302,10 +297,11 @@ def to_ML(data, class_labels):
     truth_pt = np.asarray(data['target_pt_phys'])
     reco_pt = np.asarray(data['jet_pt_phys'])
 
-    truth_mass = np.asarray(data['target_mass'])
-    # reco_mass = np.asarray(data['jet_mass'])
+    mass_target = np.asarray(data['target_mass'])
+    truth_mass = np.asarray(data['jet_genmatch_mass'])
+    reco_mass = np.asarray(data['jet_mass'])    # currently always 0 as not implemented
 
-    return X, y, pt_target, truth_pt, reco_pt, truth_mass
+    return X, y, pt_target, truth_pt, reco_pt, mass_target, truth_mass, reco_mass
 
 def load_data(outdir, percentage, test_ratio=0.1, fields=None):
     """
