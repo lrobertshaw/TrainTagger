@@ -115,14 +115,14 @@ def _split_flavor(data):
     data['target_pt_phys'] = (hadrons * hadron_pt) + (leptons * lepton_pt)
 
     # Set mass regression target
-    hadron_mass_ratio = ak.nan_to_num(data["jet_genmatch_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
+    # hadron_mass_ratio = ak.nan_to_num(data["jet_genmatch_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
     # lepton_mass_ratio = ak.nan_to_num(data["jet_genmatch_lep_vis_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
 
     hadron_mass = ak.nan_to_num(data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0)
     # lepton_mass = ak.nan_to_num(data["jet_genmatch_lep_vis_mass"], nan=0, posinf=0, neginf=0)
 
-    data['target_mass'] = np.clip(hadrons * hadron_mass_ratio, 0.3, 2)
-    data['target_mass_phys'] = (hadrons * hadron_mass)
+    # data['target_mass'] = np.clip(hadrons * hadron_mass_ratio, 0.3, 2)
+    data['target_mass'] = (hadrons * hadron_mass)
 
     # Apply pt_cut
     jet_ptmin_gen = (data['target_pt_phys'] > 5.0)
@@ -221,7 +221,7 @@ def _process_chunk(data_split, tag, extras, n_parts, chunk, outdir):
     extra_features = _get_pfcand_fields(extras)
 
     #Save them to a root file
-    save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features
+    save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass'] + extra_features
 
     # Filter the data_split to only include save_fields
     filtered_data = {field: data_split[field] for field in save_fields}
@@ -302,7 +302,10 @@ def to_ML(data, class_labels):
     truth_pt = np.asarray(data['target_pt_phys'])
     reco_pt = np.asarray(data['jet_pt_phys'])
 
-    return X, y, pt_target, truth_pt, reco_pt
+    truth_mass = np.asarray(data['target_mass'])
+    # reco_mass = np.asarray(data['jet_mass'])
+
+    return X, y, pt_target, truth_pt, reco_pt, truth_mass
 
 def load_data(outdir, percentage, test_ratio=0.1, fields=None):
     """

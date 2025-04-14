@@ -52,15 +52,27 @@ def prune_model(model, num_samples):
     pruned_model = tfmot.sparsity.keras.prune_low_magnitude(model, **pruning_params)
 
     pruned_model.compile(optimizer='adam',
-                            loss={'prune_low_magnitude_jet_id_output': 'categorical_crossentropy', 'prune_low_magnitude_pT_output': tf.keras.losses.Huber()},
-                            metrics = {'prune_low_magnitude_jet_id_output': 'categorical_accuracy', 'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error']},
-                            weighted_metrics = {'prune_low_magnitude_jet_id_output': 'categorical_accuracy', 'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error']})
+                         loss = {
+                             'prune_low_magnitude_jet_id_output': 'categorical_crossentropy',
+                             'prune_low_magnitude_pT_output': tf.keras.losses.Huber(),
+                             'prune_low_magnitude_mass_output': tf.keras.losses.Huber()
+                             },
+                         metrics = {
+                             'prune_low_magnitude_jet_id_output': 'categorical_accuracy',
+                             'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
+                             'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']
+                             },
+                         weighted_metrics = {
+                             'prune_low_magnitude_jet_id_output': 'categorical_accuracy',
+                             'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
+                             'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']
+                             })
 
     print(pruned_model.summary())
 
     return pruned_model
 
-def save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, class_labels):
+def save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, mass_target_test, class_labels):
 
     os.makedirs(os.path.join(out_dir,'testing_data'), exist_ok=True)
 
@@ -68,11 +80,12 @@ def save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, class_l
     np.save(os.path.join(out_dir, "testing_data/y_test.npy"), y_test)
     np.save(os.path.join(out_dir, "testing_data/truth_pt_test.npy"), truth_pt_test)
     np.save(os.path.join(out_dir, "testing_data/reco_pt_test.npy"), reco_pt_test)
+    np.save(os.path.join(out_dir, "testing_data/mass_target_test.npy"), mass_target_test)
     with open(os.path.join(out_dir, "class_label.json"), "w") as f: json.dump(class_labels, f, indent=4) #Dump output variables
 
     print(f"Test data saved to {out_dir}")
 
-def train_weights(y_train, truth_pt_train, class_labels, pt_flat_weighting=True):
+def train_weights(y_train, truth_pt_train, truth_mass_train, class_labels, pt_flat_weighting=True):
     """
     Re-balancing the class weights and then flatten them based on truth pT
     """
@@ -143,14 +156,14 @@ def train(out_dir, percent, model_name):
     with open(os.path.join(out_dir, "extra_vars.json"), "w") as f: json.dump(extra_vars, f, indent=4) #Dump output variables
 
     #Make into ML-like data for training
-    X_train, y_train, pt_target_train, truth_pt_train, reco_pt_train = to_ML(data_train, class_labels)
-
+    X_train, y_train, pt_target_train, truth_pt_train, reco_pt_train, truth_mass_train = to_ML(data_train, class_labels)
+    
     #Save X_test, y_test, and truth_pt_test for plotting later
-    X_test, y_test, _, truth_pt_test, reco_pt_test = to_ML(data_test, class_labels)
-    save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, class_labels)
+    X_test, y_test, _, truth_pt_test, reco_pt_test, truth_mass_test = to_ML(data_test, class_labels)
+    save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, truth_mass_test, class_labels)
 
     #Calculate the sample weights for training
-    sample_weight = train_weights(y_train, truth_pt_train, class_labels)
+    sample_weight = train_weights(y_train, truth_pt_train, truth_mass_train, class_labels)    # doesn't return anything, should be none?
 
     #Get input shape
     input_shape = X_train.shape[1:] #First dimension is batch size
@@ -172,15 +185,17 @@ def train(out_dir, percent, model_name):
                  EarlyStopping(monitor='val_loss', patience=10),
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
 
-    history = pruned_model.fit({'model_input': X_train},
-                            {'prune_low_magnitude_jet_id_output': y_train, 'prune_low_magnitude_pT_output': pt_target_train},
-                            sample_weight=sample_weight,
-                            epochs=EPOCHS,
-                            batch_size=BATCH_SIZE,
-                            verbose=2,
-                            validation_split=VALIDATION_SPLIT,
-                            callbacks = [callbacks],
-                            shuffle=True)
+    history = pruned_model.fit(
+        {'model_input': X_train},
+        {'prune_low_magnitude_jet_id_output': y_train, 'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': truth_mass_train},
+        sample_weight=sample_weight,
+        epochs=EPOCHS,
+        batch_size=BATCH_SIZE,
+        verbose=2,
+        validation_split=VALIDATION_SPLIT,
+        callbacks = [callbacks],
+        shuffle=True
+        )
     
     #Export the model
     model_export = tfmot.sparsity.keras.strip_pruning(pruned_model)

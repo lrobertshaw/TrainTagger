@@ -72,7 +72,7 @@ pfcand_fields_all:
   - jet_SC4NGJet_score_regression
   - jet_pt_phys
   - jet_genmatch_pt
-  - jet_mass
+  # - jet_mass
   - jet_genmatch_mass
 
 baseline_hardware_inputs:
