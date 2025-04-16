@@ -434,7 +434,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('-m','--model_dir', default='output/baseline', help = 'Input model')
     parser.add_argument('-s', '--sample', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125_addGenH/GluGluHHTo4B_PU200.root' , help = 'Signal sample for HH->bbbb') 
-    parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')    
+    parser.add_argument('--minbias', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_jettuples_090125/MinBias_PU200.root' , help = 'Minbias sample for deriving rates')
 
     #Different modes
     parser.add_argument('--deriveWPs', action='store_true', help='derive the working points for b-tagging')
@@ -447,6 +447,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.deriveWPs:
-        derive_bbbb_WPs(args.model_dir, args.minbias, n_entries=args.n_entries,tree=args.tree)
+        derive_bbbb_WPs(args.model_dir, args.minbias, n_entries=args.n_entries, tree=args.tree)
     elif args.eff:
         bbbb_eff(args.model_dir, args.sample, n_entries=args.n_entries,tree=args.tree)

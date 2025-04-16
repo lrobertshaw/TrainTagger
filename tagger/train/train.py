@@ -30,7 +30,7 @@ tf.config.threading.set_intra_op_parallelism_threads(
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
 tf.keras.utils.set_random_seed(420) #not a special number 
 BATCH_SIZE = 1024
-EPOCHS = 100
+EPOCHS = 15
 VALIDATION_SPLIT = 0.1 # 10% of training set will be used for validation set. 
 
 # Sparsity parameters

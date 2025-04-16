@@ -190,7 +190,7 @@ def pt_correction_hist(pt_ratio, truth_pt_test, reco_pt_test, plot_dir):
     """
 
     plot_histo([truth_pt_test,reco_pt_test,np.multiply(reco_pt_test,pt_ratio)],
-                ['Truth','Reconstructed','NN Predicted'],'',r'$p_T$ [GeV]','a.u',range=(0,300))
+                ['Truth','Reconstructed','NN Predicted'],'',r'$p_T$ [GeV]','a.u',range=(0, 400))
     save_path = os.path.join(plot_dir, "pt_hist")
     plt.savefig(f"{save_path}.pdf", bbox_inches='tight')
     plt.savefig(f"{save_path}.png", bbox_inches='tight')
@@ -214,7 +214,10 @@ def plot_input_vars(X_test, input_vars, plot_dir):
 def get_response(truth_pt, reco_pt, pt_ratio):
 
     #Calculate the regressed pt
-    regressed_pt = np.multiply(reco_pt, pt_ratio)
+    if pt_ratio is None:
+        regressed_pt = reco_pt
+    else:
+        regressed_pt = np.multiply(reco_pt, pt_ratio)
 
     #to calculate response
     uncorrected_response = []
@@ -283,6 +286,9 @@ def response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_d
     # Inclusive response
     uncorrected_response, regressed_response, uncorrected_errors, regressed_errors = get_response(truth_pt_test, reco_pt_test, pt_ratio)
     plot_response(uncorrected_response, regressed_response, uncorrected_errors, regressed_errors, flavor='inclusive', plot_name="inclusive_response")
+
+    if class_labels is None:
+        return
 
     #Flavor-wise response
     for flavor in class_labels.keys():
@@ -382,6 +388,9 @@ def rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir):
     #Inclusive rms
     uncorrected_rms, regressed_rms, uncorrected_rms_err, regressed_rms_err = get_rms(truth_pt_test, reco_pt_test, pt_ratio)
     plot_rms(uncorrected_rms, regressed_rms, uncorrected_rms_err, regressed_rms_err, flavor='inclusive', plot_name='inclusive')
+    
+    if class_labels is None:
+        return
 
     #Flavor-wise rms
     for flavor in class_labels.keys():
@@ -516,7 +525,7 @@ def basic(model_dir):
     plot_input_vars(X_test, input_vars, plot_dir)
 
     #Plot inclusive response and individual flavor
-    response(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
+    response([class_labels], y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
     
     #Plot the rms of the residuals vs pt
     rms(class_labels, y_test, truth_pt_test, reco_pt_test, pt_ratio, plot_dir)
