@@ -30,8 +30,8 @@ tf.config.threading.set_intra_op_parallelism_threads(
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
 tf.keras.utils.set_random_seed(420) #not a special number 
 BATCH_SIZE = 1024
-EPOCHS = 15
-VALIDATION_SPLIT = 0.1 # 10% of training set will be used for validation set. 
+EPOCHS = 100
+VALIDATION_SPLIT = 0.2 # 10% of training set will be used for validation set. 
 
 # Sparsity parameters
 I_SPARSITY = 0.0 #Initial sparsity
@@ -53,17 +53,17 @@ def prune_model(model, num_samples):
 
     pruned_model.compile(optimizer='adam',
                          loss = {
-                             'prune_low_magnitude_jet_id_output': 'categorical_crossentropy',
+                            #  'prune_low_magnitude_jet_id_output': 'categorical_crossentropy',
                              'prune_low_magnitude_pT_output': tf.keras.losses.Huber(),
                              'prune_low_magnitude_mass_output': tf.keras.losses.Huber()
                              },
                          metrics = {
-                             'prune_low_magnitude_jet_id_output': 'categorical_accuracy',
+                            #  'prune_low_magnitude_jet_id_output': 'categorical_accuracy',
                              'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
                              'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']
                              },
                          weighted_metrics = {
-                             'prune_low_magnitude_jet_id_output': 'categorical_accuracy',
+                            #  'prune_low_magnitude_jet_id_output': 'categorical_accuracy',
                              'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
                              'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']
                              })
@@ -191,7 +191,7 @@ def train(out_dir, percent, model_name):
 
     history = pruned_model.fit(
         {'model_input': X_train},
-        {'prune_low_magnitude_jet_id_output': y_train, 'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': truth_mass_train},
+        {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': mass_target_train},   #'prune_low_magnitude_jet_id_output': y_train, 
         sample_weight=sample_weight,
         epochs=EPOCHS,
         batch_size=BATCH_SIZE,
@@ -223,7 +223,7 @@ if __name__ == "__main__":
 
     #Making input arguments
     parser.add_argument('--make-data', action='store_true', help='Prepare the data if set.')
-    parser.add_argument('-i','--input', default='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_5param_221124/All200.root' , help = 'Path to input training data')
+    parser.add_argument('-i','--input', default='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src/FastPUPPI/condor/jobs/lightHbb_M20to80_Pt50to200_1745321368/data/lightH.root' , help = 'Path to input training data')
     parser.add_argument('-r','--ratio', default=1, type=float, help = 'Ratio (0-1) of the input data root file to process')
     parser.add_argument('-s','--step', default='100MB' , help = 'The maximum memory size to process input root file')
     parser.add_argument('-e','--extras', default='extra_fields', help= 'Which extra fields to add to output tuples, in pfcand_fields.yml')
@@ -233,7 +233,7 @@ if __name__ == "__main__":
     parser.add_argument('-p','--percent', default=100, type=int, help = 'Percentage of how much processed data to train on')
     parser.add_argument('-m','--model', default='baseline', help = 'Model object name to train on')
     parser.add_argument('-n','--name', default='baseline', help = 'Model experiment name')
-    parser.add_argument('-t','--tree', default='jetntuple/Jets', help = 'Tree within the ntuple containing the jets')
+    parser.add_argument('-t','--tree', default='outnano/Jets', help = 'Tree within the ntuple containing the jets')
 
     #Basic ploting
     parser.add_argument('--plot-basic', action='store_true', help='Plot all the basic performance if set')
