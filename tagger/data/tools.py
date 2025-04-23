@@ -398,13 +398,18 @@ def make_data(infile='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_
     #Loop through the entries
     num_entries = uproot.open(infile)[tree].num_entries
     num_entries_done = 0
+    num_entries_survived = 0
     chunk = 0
-
+    print(f"Total entries: {num_entries}")
     for data in uproot.iterate(infile, filter_name=FILTER_PATTERN, how="zip", step_size=step_size, max_workers=8):
         
+        nEntries = len(data)
+        # print(f"{nEntries} entries in chunk")
         #Define jet kinematic cuts
         jet_cut = (data['jet_pt_phys'] > 15) & (np.abs(data['jet_eta_phys']) < 2.4) & (data['jet_reject'] == 0) & (data['jet_mass'] > 5)
         data = data[jet_cut]
+        num_entries_survived += len(data)
+        # print(f"{len(data)} entries remaining in chunk after cuts ({nEntries - len(data)} entries removed)")
 
         #Add additional response variables
         # _add_response_vars(data)
@@ -419,6 +424,8 @@ def make_data(infile='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_
 
         #Number of chunk for indexing files
         chunk += 1
-        num_entries_done += len(data)
+        num_entries_done += nEntries
         print(f"Processed {num_entries_done}/{num_entries} entries | {np.round(num_entries_done / num_entries * 100, 1)}%")
         if num_entries_done / num_entries >= ratio: break
+
+    print(f"{num_entries - num_entries_survived} entries removed by cuts")

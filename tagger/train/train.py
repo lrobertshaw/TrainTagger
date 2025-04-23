@@ -53,18 +53,19 @@ def prune_model(model, num_samples):
 
     pruned_model.compile(optimizer='adam',
                          loss = {
-                            #  'prune_low_magnitude_jet_id_output': 'categorical_crossentropy',
-                             'prune_low_magnitude_pT_output': tf.keras.losses.Huber(),
+                            #  'prune_low_magnitude_pT_output': tf.keras.losses.Huber(),
                              'prune_low_magnitude_mass_output': tf.keras.losses.Huber()
                              },
+                        # loss_weights = {
+                        #     #  'prune_low_magnitude_pT_output': 1.0,
+                        #      'prune_low_magnitude_mass_output': 1.0
+                        #      },
                          metrics = {
-                            #  'prune_low_magnitude_jet_id_output': 'categorical_accuracy',
-                             'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
+                            #  'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
                              'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']
                              },
                          weighted_metrics = {
-                            #  'prune_low_magnitude_jet_id_output': 'categorical_accuracy',
-                             'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
+                            #  'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
                              'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']
                              })
 
@@ -191,7 +192,8 @@ def train(out_dir, percent, model_name):
 
     history = pruned_model.fit(
         {'model_input': X_train},
-        {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': mass_target_train},   #'prune_low_magnitude_jet_id_output': y_train, 
+        {'prune_low_magnitude_mass_output': truth_mass_train},
+        # {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': truth_mass_train},
         sample_weight=sample_weight,
         epochs=EPOCHS,
         batch_size=BATCH_SIZE,
