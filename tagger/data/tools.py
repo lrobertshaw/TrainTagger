@@ -121,7 +121,7 @@ def _split_flavor(data):
     data['target_mass_phys'] = compress_mass( data["jet_genmatch_mass"] )
 
     # Apply pt_cut and mass_cut
-    jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 15.0), (data['target_mass_phys'] > 5.0)
+    jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 15.0), (data['target_mass_phys'] > 0.0)
     for key in conditions: conditions[key] = conditions[key] & jet_ptmin_gen & jet_massmin_gen
 
     # Sanity check for data consistency
@@ -232,11 +232,11 @@ def _process_chunk(data_split, tag, extras, jet_features_tag, n_parts, chunk, ou
     """
     Process chunk of data_split to save/parse it for training datasets
     """
-
+    print(data_split)
     #Create the NN inputs
     _make_nn_inputs(data_split, tag, n_parts)
     extra_features = _get_pfcand_fields(extras)
-
+    print(data_split)
     #Save them to a root file
     save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features
 
@@ -317,8 +317,12 @@ def to_ML(data, class_labels):
     Take in the data from make_data (loaded by load_data) and make them ready for training.
     """
 
-    X = np.asarray(data['nn_inputs'])
-    y = tf.keras.utils.to_categorical(np.asarray(data['class_label']), num_classes=len(class_labels))
+    try:
+        X = ( np.asarray(data['nn_inputs']), np.asarray(data['nn_jet_inputs']) )
+    except KeyError:
+        print("Warning: jet-level features not found in data. Loading only constituent-level inputs.")
+        X = ( np.asarray(data['nn_inputs']) )
+    # y = tf.keras.utils.to_categorical(np.asarray(data['class_label']), num_classes=len(class_labels))
     pt_target = np.asarray(data['target_pt'])
     truth_pt = np.asarray(data['target_pt_phys'])
     reco_pt = np.asarray(data['jet_pt_phys'])
@@ -327,9 +331,9 @@ def to_ML(data, class_labels):
     truth_mass = np.asarray(data['target_mass_phys'])
     reco_mass = np.asarray(data['jet_mass'])
 
-    return X, y, pt_target, truth_pt, reco_pt, mass_target, truth_mass, reco_mass
+    return X, pt_target, truth_pt, reco_pt, mass_target, truth_mass, reco_mass
 
-def load_data(outdir, percentage, test_ratio=0.1, fields=None):
+def load_data(outdir, percentage, test_ratio=0.05, fields=None):
     """
     Load a specified percentage of the dataset using uproot.concatenate.
 
@@ -360,7 +364,7 @@ def load_data(outdir, percentage, test_ratio=0.1, fields=None):
 
     # Use uproot.concatenate to load and combine data from multiple files
     data = uproot.concatenate(chunk_files, filter_name=fields, library="ak")
-
+    print(data)
     # Shuffle the data indices
     total_data_len = len(data)
     indices = np.arange(total_data_len)

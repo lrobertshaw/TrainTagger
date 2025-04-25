@@ -14,6 +14,7 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCh
 from sklearn.utils.class_weight import compute_class_weight
 import mlflow
 from datetime import datetime
+import inspect
 
 num_threads = 8
 os.environ["OMP_NUM_THREADS"] = str(num_threads)
@@ -73,12 +74,17 @@ def prune_model(model, num_samples):
 
     return pruned_model
 
-def save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, class_labels):
+def save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, class_labels):
 
     os.makedirs(os.path.join(out_dir,'testing_data'), exist_ok=True)
 
-    np.save(os.path.join(out_dir, "testing_data/X_test.npy"), X_test)
-    np.save(os.path.join(out_dir, "testing_data/y_test.npy"), y_test)
+    if len(X_test) > 1:
+        np.save(os.path.join(out_dir, "testing_data/X_test_constits.npy"), X_test[0])
+        np.save(os.path.join(out_dir, "testing_data/X_test_jets.npy"), X_test[1])
+    else:
+        np.save(os.path.join(out_dir, "testing_data/X_test.npy"), X_test[0])
+
+    # np.save(os.path.join(out_dir, "testing_data/y_test.npy"), y_test)
 
     np.save(os.path.join(out_dir, "testing_data/truth_pt_test.npy"), truth_pt_test)
     np.save(os.path.join(out_dir, "testing_data/reco_pt_test.npy"), reco_pt_test)
@@ -161,23 +167,33 @@ def train(out_dir, percent, model_name):
     with open(os.path.join(out_dir, "extra_vars.json"), "w") as f: json.dump(extra_vars, f, indent=4) #Dump output variables
 
     #Make into ML-like data for training
-    X_train, y_train, pt_target_train, truth_pt_train, reco_pt_train, mass_target_train, truth_mass_train, reco_mass_train = to_ML(data_train, class_labels)
+    X_train, pt_target_train, truth_pt_train, reco_pt_train, mass_target_train, truth_mass_train, reco_mass_train = to_ML(data_train, class_labels)
     
     #Save X_test, y_test, and truth_pt_test for plotting later
-    X_test, y_test, _, truth_pt_test, reco_pt_test, _, truth_mass_test, reco_mass_test = to_ML(data_test, class_labels)
-    save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, class_labels)
+    X_test, _, truth_pt_test, reco_pt_test, _, truth_mass_test, reco_mass_test = to_ML(data_test, class_labels)
+    save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, class_labels)
 
     #Calculate the sample weights for training
-    sample_weight = train_weights(y_train, truth_pt_train, truth_mass_train, class_labels)    # doesn't return anything, should be none?
+    # sample_weight = train_weights(y_train, truth_pt_train, truth_mass_train, class_labels)    # doesn't return anything, should be none?
+
+    if len(X_train) == 2:
+        X_train, X_train_jets = X_train[0], X_train[1]
+        inputs =  {'constituent_inputs': X_train, 'jet_inputs': X_train_jets}
+    elif len(X_train) == 1:
+        X_train = X_train[0]
+        inputs =  {'model_input': X_train}
+    else:
+        raise ValueError("No saved input data found!")
 
     #Get input shape
-    input_shape = X_train.shape[1:] #First dimension is batch size
-    output_shape = y_train.shape[1:]
+    input_shape = (X_train.shape[1:], X_train_jets.shape[1:]) if len(X_train) > 1 else X_train.shape[1:]    #First dimension is batch size, input shape is NCONSTITUENTS x NFEATURES
+    print(input_shape)
+    # output_shape = y_train.shape[1:]
 
     #Dynamically get the model
     try:
         model_func = getattr(models, model_name)
-        model = model_func(input_shape, output_shape)  # Assuming the model function doesn't require additional arguments
+        model = model_func(input_shape)  # Assuming the model function doesn't require additional arguments
     except AttributeError:
         raise ValueError(f"Model '{model_name}' is not defined in the 'models' module.")
 
@@ -191,9 +207,9 @@ def train(out_dir, percent, model_name):
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
 
     history = pruned_model.fit(
-        {'constituent_level_inputs': X_train, 'jet_level_inputs': jet_data},
+        inputs,
         {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': mass_target_train},
-        sample_weight=sample_weight,
+        # sample_weight=sample_weight,
         epochs=EPOCHS,
         batch_size=BATCH_SIZE,
         verbose=2,
@@ -201,19 +217,6 @@ def train(out_dir, percent, model_name):
         callbacks = [callbacks],
         shuffle=True
         )
-
-    # history = pruned_model.fit(
-    #     {'constituents_input': X_train},
-    #     # {'prune_low_magnitude_mass_output': mass_target_train},
-    #     {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': mass_target_train},
-    #     sample_weight=sample_weight,
-    #     epochs=EPOCHS,
-    #     batch_size=BATCH_SIZE,
-    #     verbose=2,
-    #     validation_split=VALIDATION_SPLIT,
-    #     callbacks = [callbacks],
-    #     shuffle=True
-    #     )
     
     #Export the model
     model_export = tfmot.sparsity.keras.strip_pruning(pruned_model)

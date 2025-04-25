@@ -10,7 +10,7 @@ from qkeras.qlayers import QDense, QActivation
 from qkeras import QConv1D
 
 
-def baseline(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1):
+def baseline(inputs_shape, bits=9, bits_int=2, alpha_val=1):
 
     # Define a dictionary for common arguments
     common_args = {
@@ -64,8 +64,7 @@ def baseline(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1):
     return model
 
 
-
-def baseline_with_jet_features(constituent_shape, n_jet_features, output_shape, bits=9, bits_int=2, alpha_val=1):
+def baseline_with_jet_features(input_shape, bits=9, bits_int=2, alpha_val=1):
     """
     Builds a Keras model with constituent and jet-level inputs.
 
@@ -80,6 +79,11 @@ def baseline_with_jet_features(constituent_shape, n_jet_features, output_shape, 
     Returns:
         tf.keras.Model: The compiled Keras model.
     """
+    try:
+        constituent_shape, n_jet_features = input_shape
+    except ValueError:
+        raise ValueError("This model uses constituent AND jet level features, but only one input shape was provided. "
+                         "Please provide a tuple of (constituent_shape, n_jet_features) or use a different model.")
 
     common_args = {
         'kernel_quantizer': quantized_bits(bits, bits_int, alpha=alpha_val),
@@ -89,9 +93,7 @@ def baseline_with_jet_features(constituent_shape, n_jet_features, output_shape, 
 
     # --- Define Two Inputs ---
     # Input for constituent data (sequence)
-    constituent_input = Input(shape=constituent_shape, name='constituents_input')
-    # Input for jet-level data (vector)
-    jet_input = Input(shape=(n_jet_features,), name='jet_input') # Shape is (n_jet_features,)
+    constituent_input = Input(shape=constituent_shape, name='constituent_inputs')
 
     # --- Process Constituent Input (Original Main Branch) ---
     # Normalization applied only to constituents
@@ -110,15 +112,9 @@ def baseline_with_jet_features(constituent_shape, n_jet_features, output_shape, 
     # Pool constituent features
     constituent_features = GlobalAveragePooling1D(name='avgpool')(main) # Output shape: (batch_size, 10)
 
-    # --- Optional: Normalize Jet Input ---
-    # You might want to normalize the jet features as well, depending on their scale
-    # normalized_jet_input = BatchNormalization(name='norm_jet_input')(jet_input)
-    # If normalized, use normalized_jet_input in Concatenate below
-
-    # --- Combine Features ---
-    # Concatenate the pooled constituent features and the jet-level features
-    # Ensure the jet_input is used here (or normalized_jet_input if you add normalization)
-    combined_features = Concatenate(name='combine_features')([constituent_features, jet_input]) # Shape: (batch_size, 10 + n_jet_features)
+    jet_input = Input(shape=n_jet_features, name='jet_inputs') # Shape is (n_jet_features,)
+    norm_jet_input = BatchNormalization(name='norm_jet_input')(jet_input)
+    combined_features = Concatenate(name='combine_features')([constituent_features, norm_jet_input]) # Shape: (batch_size, 10 + n_jet_features)
 
     # --- Regression Heads (Applied to Combined Features) ---
 
