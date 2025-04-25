@@ -115,11 +115,10 @@ def _split_flavor(data):
     data['target_pt_phys'] = (hadrons * hadron_pt) + (leptons * lepton_pt)
 
     # Set mass regression target
-    mass_ratio = ak.nan_to_num( data["jet_genmatch_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0 )
-    mass = ak.nan_to_num(data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0)
-
-    data["target_mass"] = np.clip(mass_ratio, 0.3, 2)
-    data['target_mass_phys'] = mass    #(np.clip(mass, 8, 128) - 8) / (128 - 8)
+    compress_mass = lambda mass: (np.clip(mass, 8, 128) - 8) / (128 - 8)
+    compressed_mass_ratio = ak.nan_to_num( compress_mass(data["jet_genmatch_mass"]) / compress_mass(data["jet_mass"]), nan=0, posinf=0, neginf=0 )
+    data["target_mass"] = np.clip(compressed_mass_ratio, 0.3, 3)
+    data['target_mass_phys'] = compress_mass( data["jet_genmatch_mass"] )
 
     # Apply pt_cut and mass_cut
     jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 5.0), (data['target_mass_phys'] > 0.)
@@ -360,7 +359,7 @@ def load_data(outdir, percentage, test_ratio=0.1, fields=None):
     
     return train_data, test_data, class_labels, input_vars, extra_vars
 
-def make_data(infile='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_v131Xv9/extendedTRK_5param_221124/All200.root', 
+def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src/TrainTagger/sc8Jets.root', 
               outdir='training_data/',
               tag=INPUT_TAG,
               extras=EXTRA_FIELDS,
@@ -404,12 +403,10 @@ def make_data(infile='/eos/cms/store/cmst3/group/l1tr/sewuchte/l1teg/fp_ntuples_
     for data in uproot.iterate(infile, filter_name=FILTER_PATTERN, how="zip", step_size=step_size, max_workers=8):
         
         nEntries = len(data)
-        # print(f"{nEntries} entries in chunk")
         #Define jet kinematic cuts
         jet_cut = (data['jet_pt_phys'] > 15) & (np.abs(data['jet_eta_phys']) < 2.4) & (data['jet_reject'] == 0) & (data['jet_mass'] > 5)
         data = data[jet_cut]
         num_entries_survived += len(data)
-        # print(f"{len(data)} entries remaining in chunk after cuts ({nEntries - len(data)} entries removed)")
 
         #Add additional response variables
         # _add_response_vars(data)

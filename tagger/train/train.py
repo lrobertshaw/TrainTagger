@@ -29,8 +29,8 @@ tf.config.threading.set_intra_op_parallelism_threads(
 
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
 tf.keras.utils.set_random_seed(420) #not a special number 
-BATCH_SIZE = 1024
-EPOCHS = 100
+BATCH_SIZE = 1024    # less jets for SC8 jets
+EPOCHS = 200
 VALIDATION_SPLIT = 0.2 # 10% of training set will be used for validation set. 
 
 # Sparsity parameters
@@ -53,7 +53,7 @@ def prune_model(model, num_samples):
 
     pruned_model.compile(optimizer='adam',
                          loss = {
-                            #  'prune_low_magnitude_pT_output': tf.keras.losses.Huber(),
+                             'prune_low_magnitude_pT_output': tf.keras.losses.Huber(),
                              'prune_low_magnitude_mass_output': tf.keras.losses.Huber()
                              },
                         # loss_weights = {
@@ -61,11 +61,11 @@ def prune_model(model, num_samples):
                         #      'prune_low_magnitude_mass_output': 1.0
                         #      },
                          metrics = {
-                            #  'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
+                             'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
                              'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']
                              },
                          weighted_metrics = {
-                            #  'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
+                             'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
                              'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']
                              })
 
@@ -192,8 +192,8 @@ def train(out_dir, percent, model_name):
 
     history = pruned_model.fit(
         {'model_input': X_train},
-        {'prune_low_magnitude_mass_output': truth_mass_train},
-        # {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': truth_mass_train},
+        # {'prune_low_magnitude_mass_output': mass_target_train},
+        {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': mass_target_train},
         sample_weight=sample_weight,
         epochs=EPOCHS,
         batch_size=BATCH_SIZE,
