@@ -97,6 +97,11 @@ baseline_hardware_inputs:
   - emid
   - quality
 
+jet_features:
+  - jet_pt_phys
+  - jet_eta_phys
+  - jet_mass
+
 extra_fields:
   - jet_pt_phys
   - jet_genmatch_pt

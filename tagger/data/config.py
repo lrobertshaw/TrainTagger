@@ -3,3 +3,4 @@ FILTER_PATTERN = "/(jet)_(reject|eta|eta_phys|phi|phi_phys|pt|pt_phys|pt_raw|mas
 N_PARTICLES = 32 # Number of particle constituents used in a jet for tagging, changed to 32 for wide cone jets
 INPUT_TAG = "baseline_hardware_inputs" # Defined in pfcand_fields.yml
 EXTRA_FIELDS = "extra_fields" # Defined in pfcand_fields.yml
+JET_FIELDS = "jet_features"

@@ -8,7 +8,7 @@ import tensorflow as tf
 import uproot, yaml
 
 # Dataset configuration
-from .config import FILTER_PATTERN, N_PARTICLES, INPUT_TAG, EXTRA_FIELDS
+from .config import FILTER_PATTERN, N_PARTICLES, INPUT_TAG, EXTRA_FIELDS, JET_FIELDS
 
 gc.set_threshold(0)
 
@@ -121,7 +121,7 @@ def _split_flavor(data):
     data['target_mass_phys'] = compress_mass( data["jet_genmatch_mass"] )
 
     # Apply pt_cut and mass_cut
-    jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 5.0), (data['target_mass_phys'] > 0.)
+    jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 15.0), (data['target_mass_phys'] > 5.0)
     for key in conditions: conditions[key] = conditions[key] & jet_ptmin_gen & jet_massmin_gen
 
     # Sanity check for data consistency
@@ -172,6 +172,26 @@ def _make_nn_inputs(data_split, tag, n_parts):
     
     return
 
+def _make_nn_jet_inputs(data_split, tag):
+    
+    features = _get_pfcand_fields(tag)
+
+    #Concatenate all the inputs
+    inputs_list = []
+
+    #Vertically stacked them to create input sets
+    #https://awkward-array.org/doc/main/user-guide/how-to-restructure-concatenate.html
+    #Also pad and fill them with 0 to the number of constituents we are using (nconstit)
+    for field in features:
+        field_array = data_split[field]
+        inputs_list.append(field_array[:, np.newaxis])
+
+    #batch_size, n_particles, n_features
+    inputs = ak.concatenate(inputs_list, axis=1)
+    data_split['nn_jet_inputs'] = inputs
+    
+    return
+
 def _save_chunk_metadata(metadata_file, chunk, entries, outfile):
 
     chunk_info = {
@@ -195,19 +215,20 @@ def _save_chunk_metadata(metadata_file, chunk, entries, outfile):
 
     return
 
-def _save_dataset_metadata(outdir, class_labels, tag, extras):
+def _save_dataset_metadata(outdir, tag, extras, jet_features_tag):
 
     dataset_metadata_file = os.path.join(outdir, 'variables.json')
 
-    metadata = {"outputs": class_labels,
+    metadata = {"outputs": ["pt", "mass"],
                 "inputs": _get_pfcand_fields(tag),
-                "extras": _get_pfcand_fields(extras),}
+                "extras": _get_pfcand_fields(extras),
+                "jet_level_inputs": _get_pfcand_fields(jet_features_tag)}
 
     with open(dataset_metadata_file, "w") as f: json.dump(metadata, f, indent=4)
 
     return
 
-def _process_chunk(data_split, tag, extras, n_parts, chunk, outdir):
+def _process_chunk(data_split, tag, extras, jet_features_tag, n_parts, chunk, outdir):
     """
     Process chunk of data_split to save/parse it for training datasets
     """
@@ -218,6 +239,10 @@ def _process_chunk(data_split, tag, extras, n_parts, chunk, outdir):
 
     #Save them to a root file
     save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features
+
+    if jet_features_tag is not None:
+        _make_nn_jet_inputs(data_split, jet_features_tag)
+        save_fields += ["nn_jet_inputs"]
 
     # Filter the data_split to only include save_fields
     filtered_data = {field: data_split[field] for field in save_fields}
@@ -363,6 +388,7 @@ def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src
               outdir='training_data/',
               tag=INPUT_TAG,
               extras=EXTRA_FIELDS,
+              jet_features_tag=JET_FIELDS,
               n_parts=N_PARTICLES,
               ratio=1.0,
               step_size="100MB",
@@ -414,10 +440,10 @@ def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src
         data_split, class_labels = _split_flavor(data)
 
         #If first chunk then save metadata of the dataset
-        if chunk == 0: _save_dataset_metadata(outdir, class_labels, tag, extras)
+        if chunk == 0: _save_dataset_metadata(outdir, tag, extras, jet_features_tag)
 
         #Process and save training data for a given feature set
-        _process_chunk(data_split, tag=tag, extras=extras, n_parts=n_parts, chunk=chunk, outdir=outdir)
+        _process_chunk(data_split, tag=tag, extras=extras, jet_features_tag=jet_features_tag, n_parts=n_parts, chunk=chunk, outdir=outdir)
 
         #Number of chunk for indexing files
         chunk += 1

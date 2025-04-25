@@ -191,8 +191,7 @@ def train(out_dir, percent, model_name):
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
 
     history = pruned_model.fit(
-        {'model_input': X_train},
-        # {'prune_low_magnitude_mass_output': mass_target_train},
+        {'constituent_level_inputs': X_train, 'jet_level_inputs': jet_data},
         {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': mass_target_train},
         sample_weight=sample_weight,
         epochs=EPOCHS,
@@ -202,6 +201,19 @@ def train(out_dir, percent, model_name):
         callbacks = [callbacks],
         shuffle=True
         )
+
+    # history = pruned_model.fit(
+    #     {'constituents_input': X_train},
+    #     # {'prune_low_magnitude_mass_output': mass_target_train},
+    #     {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': mass_target_train},
+    #     sample_weight=sample_weight,
+    #     epochs=EPOCHS,
+    #     batch_size=BATCH_SIZE,
+    #     verbose=2,
+    #     validation_split=VALIDATION_SPLIT,
+    #     callbacks = [callbacks],
+    #     shuffle=True
+    #     )
     
     #Export the model
     model_export = tfmot.sparsity.keras.strip_pruning(pruned_model)
