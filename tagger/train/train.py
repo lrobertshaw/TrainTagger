@@ -4,13 +4,13 @@ import os, shutil, json
 #Import from other modules
 from tagger.data.tools import make_data, load_data, to_ML
 from tagger.plot.basic import loss_history, basic
-import models
+import tagger.train.models as models
 
 #Third parties
 import numpy as np
 import tensorflow as tf
 import tensorflow_model_optimization as tfmot
-from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint, LearningRateScheduler
 from sklearn.utils.class_weight import compute_class_weight
 import mlflow
 from datetime import datetime
@@ -54,20 +54,16 @@ def prune_model(model, num_samples):
 
     pruned_model.compile(optimizer='adam',
                          loss = {
-                             'prune_low_magnitude_pT_output': tf.keras.losses.Huber(),
-                             'prune_low_magnitude_mass_output': tf.keras.losses.Huber()
+                             'prune_low_magnitude_pT_output': 'mean_absolute_percentage_error',
+                             'prune_low_magnitude_mass_output': 'mean_absolute_percentage_error'
                              },
-                        # loss_weights = {
-                        #     #  'prune_low_magnitude_pT_output': 1.0,
-                        #      'prune_low_magnitude_mass_output': 1.0
-                        #      },
                          metrics = {
-                             'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
-                             'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']
+                             'prune_low_magnitude_pT_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error'],
+                             'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
                              },
                          weighted_metrics = {
-                             'prune_low_magnitude_pT_output': ['mae', 'mean_squared_error'],
-                             'prune_low_magnitude_mass_output': ['mae', 'mean_squared_error']
+                             'prune_low_magnitude_pT_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error'],
+                             'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
                              })
 
     print(pruned_model.summary())
@@ -78,11 +74,11 @@ def save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test
 
     os.makedirs(os.path.join(out_dir,'testing_data'), exist_ok=True)
 
-    if len(X_test) > 1:
+    if len(X_test) == 2:
         np.save(os.path.join(out_dir, "testing_data/X_test_constits.npy"), X_test[0])
         np.save(os.path.join(out_dir, "testing_data/X_test_jets.npy"), X_test[1])
     else:
-        np.save(os.path.join(out_dir, "testing_data/X_test.npy"), X_test[0])
+        np.save(os.path.join(out_dir, "testing_data/X_test.npy"), X_test)
 
     # np.save(os.path.join(out_dir, "testing_data/y_test.npy"), y_test)
 
@@ -176,17 +172,16 @@ def train(out_dir, percent, model_name):
     #Calculate the sample weights for training
     # sample_weight = train_weights(y_train, truth_pt_train, truth_mass_train, class_labels)    # doesn't return anything, should be none?
 
+    print(len(X_train))
     if len(X_train) == 2:
-        X_train, X_train_jets = X_train[0], X_train[1]
-        inputs =  {'constituent_inputs': X_train, 'jet_inputs': X_train_jets}
-    elif len(X_train) == 1:
-        X_train = X_train[0]
-        inputs =  {'model_input': X_train}
+        X_train_constits, X_train_jets = X_train[0], X_train[1]
+        inputs =  {'constituent_inputs': X_train_constits, 'jet_inputs': X_train_jets}
     else:
-        raise ValueError("No saved input data found!")
+        # X_train = X_train[0]
+        inputs =  {'constituent_inputs': X_train}
 
     #Get input shape
-    input_shape = (X_train.shape[1:], X_train_jets.shape[1:]) if len(X_train) > 1 else X_train.shape[1:]    #First dimension is batch size, input shape is NCONSTITUENTS x NFEATURES
+    input_shape = (X_train_constits.shape[1:], X_train_jets.shape[1:]) if len(X_train) == 2 else X_train.shape[1:]    #First dimension is batch size, input shape is NCONSTITUENTS x NFEATURES
     print(input_shape)
     # output_shape = y_train.shape[1:]
 
@@ -198,24 +193,27 @@ def train(out_dir, percent, model_name):
         raise ValueError(f"Model '{model_name}' is not defined in the 'models' module.")
 
     #Train it with a pruned model
-    num_samples = X_train.shape[0] * (1 - VALIDATION_SPLIT)
+    num_samples = X_train_constits.shape[0] * (1 - VALIDATION_SPLIT)
     pruned_model = prune_model(model, num_samples)
 
     #Now fit to the data
     callbacks = [tfmot.sparsity.keras.UpdatePruningStep(),
-                 EarlyStopping(monitor='val_loss', patience=10),
+                 EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, start_from_epoch=10),
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
+
+    from tagger.train.weights import mass_flatten_weights
 
     history = pruned_model.fit(
         inputs,
-        {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': mass_target_train},
-        # sample_weight=sample_weight,
-        epochs=EPOCHS,
-        batch_size=BATCH_SIZE,
-        verbose=2,
-        validation_split=VALIDATION_SPLIT,
+        # {'prune_low_magnitude_mass_output': truth_mass_train },
+        {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': truth_mass_train},
+        sample_weight = mass_flatten_weights(truth_mass_train),
+        epochs = EPOCHS,
+        batch_size = BATCH_SIZE,
+        verbose = 2,
+        validation_split = VALIDATION_SPLIT,
         callbacks = [callbacks],
-        shuffle=True
+        shuffle = True
         )
     
     #Export the model

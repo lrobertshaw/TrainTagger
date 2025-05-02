@@ -29,26 +29,26 @@ def _split_flavor(data):
         dict: A dictionary containing the split data by label.
     """
 
-    genmatch_pt_base = data['jet_genmatch_pt'] > 0    # Only jets matched to a gen jet
+    genmatch_base = (data['jet_genmatch_pt'] > 0) & (data['jet_genmatch_mass'] > 0)    # Only jets matched to a gen jet
 
     # Define conditions for each label
     conditions = {
         "b": ( # Bottom
-            genmatch_pt_base &
+            genmatch_base &
             (data['jet_muflav'] == 0) &
             (data['jet_tauflav'] == 0) &
             (data['jet_elflav'] == 0) &
             (data['jet_genmatch_hflav'] == 5)
         ),
         "charm": ( # Charm
-            genmatch_pt_base &
+            genmatch_base &
             (data['jet_muflav'] == 0) &
             (data['jet_tauflav'] == 0) &
             (data['jet_elflav'] == 0) &
             (data['jet_genmatch_hflav'] == 4)
         ),
         "light": ( # uds
-            genmatch_pt_base &
+            genmatch_base &
             (data['jet_muflav'] == 0) &
             (data['jet_tauflav'] == 0) &
             (data['jet_elflav'] == 0) &
@@ -56,7 +56,7 @@ def _split_flavor(data):
             ((abs(data['jet_genmatch_pflav']) == 0) | (abs(data['jet_genmatch_pflav']) == 1) | (abs(data['jet_genmatch_pflav']) == 2) | (abs(data['jet_genmatch_pflav']) == 3))
         ),
         "gluon": ( # Gluon
-            genmatch_pt_base &
+            genmatch_base &
             (data['jet_muflav'] == 0) &
             (data['jet_tauflav'] == 0) &
             (data['jet_elflav'] == 0) &
@@ -64,27 +64,27 @@ def _split_flavor(data):
             (data['jet_genmatch_pflav'] == 21)
         ),
         "taup": ( # Tau +
-            genmatch_pt_base &
+            genmatch_base &
             (data['jet_muflav'] == 0) &
             (data['jet_tauflav'] == 1) &
             (data['jet_taucharge'] > 0) &
             (data['jet_elflav'] == 0)
         ),
         "taum": ( # Tau -
-            genmatch_pt_base &
+            genmatch_base &
             (data['jet_muflav'] == 0) &
             (data['jet_tauflav'] == 1) &
             (data['jet_taucharge'] < 0) &
             (data['jet_elflav'] == 0)
         ),
         "muon": ( # muon
-            genmatch_pt_base &
+            genmatch_base &
             (data['jet_muflav'] == 1) &
             (data['jet_tauflav'] == 0) &
             (data['jet_elflav'] == 0)
         ),
         "electron": ( # electron
-            genmatch_pt_base &
+            genmatch_base &
             (data['jet_muflav'] == 0) &
             (data['jet_tauflav'] == 0) &
             (data['jet_elflav'] == 1)
@@ -118,10 +118,10 @@ def _split_flavor(data):
     compress_mass = lambda mass: (np.clip(mass, 8, 128) - 8) / (128 - 8)
     compressed_mass_ratio = ak.nan_to_num( compress_mass(data["jet_genmatch_mass"]) / compress_mass(data["jet_mass"]), nan=0, posinf=0, neginf=0 )
     data["target_mass"] = np.clip(compressed_mass_ratio, 0.3, 3)
-    data['target_mass_phys'] = compress_mass( data["jet_genmatch_mass"] )
+    data['target_mass_phys'] = np.clip( data["jet_genmatch_mass"], 0, 256 )
 
     # Apply pt_cut and mass_cut
-    jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 15.0), (data['target_mass_phys'] > 0.0)
+    jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 15.0), (data['target_mass_phys'] > 5.0)
     for key in conditions: conditions[key] = conditions[key] & jet_ptmin_gen & jet_massmin_gen
 
     # Sanity check for data consistency
@@ -129,6 +129,7 @@ def _split_flavor(data):
     if split_data_sum != len(data[jet_ptmin_gen & jet_massmin_gen]):
         raise ValueError(f"Data splitting error: Total entries ({split_data_sum}) do not match the filtered data length ({len(data[jet_ptmin_gen & jet_massmin_gen])}).")
 
+    return data, class_labels
     return data[jet_ptmin_gen & jet_massmin_gen], class_labels
 
 def _get_pfcand_fields(tag):
@@ -151,7 +152,7 @@ def _pad_fill(array, target):
     return ak.fill_none(ak.pad_none(array, target, axis=1, clip=True), 0)
 
 def _make_nn_inputs(data_split, tag, n_parts):
-    
+
     features = _get_pfcand_fields(tag)
 
     #Concatenate all the inputs
@@ -165,6 +166,21 @@ def _make_nn_inputs(data_split, tag, n_parts):
 
         padded_filled_array = _pad_fill(field_array, n_parts)
         inputs_list.append(padded_filled_array[:, :, np.newaxis])
+
+    from math import pi
+    pt = data_split["jet_pfcand"]["pt"]
+    deta = data_split["jet_pfcand"]["deta"]
+    dphi = data_split["jet_pfcand"]["dphi"]
+    
+    energy = pt * np.cosh(deta*pi/720)
+    px = pt * np.cos(dphi*pi/720)
+    py = pt * np.sin(dphi*pi/720)
+    pz = pt * np.sinh(deta*pi/720)
+
+    inputs_list.append(_pad_fill(energy, n_parts)[:, :, np.newaxis])
+    inputs_list.append(_pad_fill(px, n_parts)[:, :, np.newaxis])
+    inputs_list.append(_pad_fill(py, n_parts)[:, :, np.newaxis])
+    inputs_list.append(_pad_fill(pz, n_parts)[:, :, np.newaxis])
 
     #batch_size, n_particles, n_features
     inputs = ak.concatenate(inputs_list, axis=2)
@@ -219,10 +235,15 @@ def _save_dataset_metadata(outdir, tag, extras, jet_features_tag):
 
     dataset_metadata_file = os.path.join(outdir, 'variables.json')
 
-    metadata = {"outputs": ["pt", "mass"],
+    if jet_features_tag is None:
+        metadata = {"outputs": ["pt", "mass"],
                 "inputs": _get_pfcand_fields(tag),
-                "extras": _get_pfcand_fields(extras),
-                "jet_level_inputs": _get_pfcand_fields(jet_features_tag)}
+                "extras": _get_pfcand_fields(extras)}
+    else:
+        metadata = {"outputs": ["pt", "mass"],
+                    "inputs": _get_pfcand_fields(tag),
+                    "extras": _get_pfcand_fields(extras),
+                    "jet_level_inputs": _get_pfcand_fields(jet_features_tag)}
 
     with open(dataset_metadata_file, "w") as f: json.dump(metadata, f, indent=4)
 
@@ -232,11 +253,11 @@ def _process_chunk(data_split, tag, extras, jet_features_tag, n_parts, chunk, ou
     """
     Process chunk of data_split to save/parse it for training datasets
     """
-    print(data_split)
+
     #Create the NN inputs
     _make_nn_inputs(data_split, tag, n_parts)
     extra_features = _get_pfcand_fields(extras)
-    print(data_split)
+
     #Save them to a root file
     save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features
 
@@ -319,9 +340,9 @@ def to_ML(data, class_labels):
 
     try:
         X = ( np.asarray(data['nn_inputs']), np.asarray(data['nn_jet_inputs']) )
-    except KeyError:
+    except:
         print("Warning: jet-level features not found in data. Loading only constituent-level inputs.")
-        X = ( np.asarray(data['nn_inputs']) )
+        X = np.asarray(data['nn_inputs'])
     # y = tf.keras.utils.to_categorical(np.asarray(data['class_label']), num_classes=len(class_labels))
     pt_target = np.asarray(data['target_pt'])
     truth_pt = np.asarray(data['target_pt_phys'])
@@ -333,7 +354,7 @@ def to_ML(data, class_labels):
 
     return X, pt_target, truth_pt, reco_pt, mass_target, truth_mass, reco_mass
 
-def load_data(outdir, percentage, test_ratio=0.05, fields=None):
+def load_data(outdir, percentage, test_ratio=0.15, fields=None):
     """
     Load a specified percentage of the dataset using uproot.concatenate.
 
@@ -437,12 +458,14 @@ def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src
         jet_cut = (data['jet_pt_phys'] > 15) & (np.abs(data['jet_eta_phys']) < 2.4) & (data['jet_reject'] == 0) & (data['jet_mass'] > 5)
         data = data[jet_cut]
         num_entries_survived += len(data)
-
+        print("AFTER L1 CUTS:")
+        print(data)
         #Add additional response variables
         # _add_response_vars(data)
         #Split data into all the training classes
         data_split, class_labels = _split_flavor(data)
-
+        print("AFTER FLAVOR SPLIT:")
+        print(data_split)
         #If first chunk then save metadata of the dataset
         if chunk == 0: _save_dataset_metadata(outdir, tag, extras, jet_features_tag)
 
