@@ -103,12 +103,15 @@ def baseline_with_jet_features(input_shape, bits=9, bits_int=2, alpha_val=1):
     main = BatchNormalization(name='norm_constituent_input')(constituent_input)
 
     # First Conv1D on constituents
-    main = QConv1D(filters=10, kernel_size=1, name='Conv1D_1', **common_args)(main)
+    main = QConv1D(filters=16, kernel_size=1, name='Conv1D_1', **common_args)(main)
     main = QActivation(activation=quantized_relu(bits), name='relu_1')(main)
 
     # Second Conv1D on constituents
-    main = QConv1D(filters=10, kernel_size=1, name='Conv1D_2', **common_args)(main)
+    main = QConv1D(filters=32, kernel_size=1, name='Conv1D_2', **common_args)(main)
     main = QActivation(activation=quantized_relu(bits), name='relu_2')(main)
+
+    main = QConv1D(filters=64, kernel_size=1, name='Conv1D_3', **common_args)(main)
+    main = QActivation(activation=quantized_relu(bits), name='relu_3')(main)
 
     # Linear activation before pooling
     main = QActivation(activation='quantized_bits(18,8)', name='act_pool')(main)
