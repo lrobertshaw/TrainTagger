@@ -11,28 +11,26 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_model_optimization as tfmot
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint, LearningRateScheduler
+from tensorflow.keras.utils import plot_model
 from sklearn.utils.class_weight import compute_class_weight
 import mlflow
+
 from datetime import datetime
 import inspect
 
-num_threads = 8
+num_threads = 24
 os.environ["OMP_NUM_THREADS"] = str(num_threads)
 os.environ["TF_NUM_INTRAOP_THREADS"] = str(num_threads)
 os.environ["TF_NUM_INTEROP_THREADS"] = str(num_threads)
 
-tf.config.threading.set_inter_op_parallelism_threads(
-    num_threads
-)
-tf.config.threading.set_intra_op_parallelism_threads(
-    num_threads
-)
+tf.config.threading.set_inter_op_parallelism_threads(num_threads)
+tf.config.threading.set_intra_op_parallelism_threads(num_threads)
 
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
 tf.keras.utils.set_random_seed(420) #not a special number 
-BATCH_SIZE = 1024    # less jets for SC8 jets
-EPOCHS = 200
-VALIDATION_SPLIT = 0.2 # 10% of training set will be used for validation set. 
+BATCH_SIZE = 64 #1024
+EPOCHS = 10
+VALIDATION_SPLIT = 0.2
 
 # Sparsity parameters
 I_SPARSITY = 0.0 #Initial sparsity
@@ -49,38 +47,42 @@ def prune_model(model, num_samples):
     end_step = np.ceil(num_samples / BATCH_SIZE).astype(np.int32) * EPOCHS
 
     #Define the pruned model
-    pruning_params = {'pruning_schedule': tfmot.sparsity.keras.PolynomialDecay(initial_sparsity=I_SPARSITY, final_sparsity=F_SPARSITY, begin_step=0, end_step=end_step)}
-    pruned_model = tfmot.sparsity.keras.prune_low_magnitude(model, **pruning_params)
+    # pruning_params = {'pruning_schedule': tfmot.sparsity.keras.PolynomialDecay(initial_sparsity=I_SPARSITY, final_sparsity=F_SPARSITY, begin_step=0, end_step=end_step)}
+    pruned_model = model#tfmot.sparsity.keras.prune_low_magnitude(model, **pruning_params)
 
+    mets = ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
     pruned_model.compile(optimizer='adam',
-                         loss = {
-                             'prune_low_magnitude_pT_output': 'mean_absolute_percentage_error',
-                             'prune_low_magnitude_mass_output': 'mean_absolute_percentage_error'
-                             },
-                         metrics = {
-                             'prune_low_magnitude_pT_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error'],
-                             'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
-                             },
-                         weighted_metrics = {
-                             'prune_low_magnitude_pT_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error'],
-                             'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
-                             })
+                         loss = {'pT_output':'mape', 'mass_output': 'mape'}
+                        #  metrics = {'pT_output': mets},#, 'mass_output': mets},
+                        #  weighted_metrics = {'pT_output': mets}#, 'mass_output': mets}
+                         )
+    # pruned_model.compile(optimizer='adam',
+    #                      loss = {
+    #                         #  'prune_low_magnitude_pT_output': 'mean_absolute_percentage_error',
+    #                          'prune_low_magnitude_mass_output': 'mean_absolute_percentage_error'
+    #                          },
+    #                      metrics = {
+    #                         #  'prune_low_magnitude_pT_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error'],
+    #                          'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
+    #                          },
+    #                      weighted_metrics = {
+    #                         #  'prune_low_magnitude_pT_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error'],
+    #                          'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
+    #                          })
 
     print(pruned_model.summary())
 
     return pruned_model
 
-def save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, class_labels):
+def save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, use_jets):
 
     os.makedirs(os.path.join(out_dir,'testing_data'), exist_ok=True)
 
-    if len(X_test) == 2:
+    if use_jets:
         np.save(os.path.join(out_dir, "testing_data/X_test_constits.npy"), X_test[0])
         np.save(os.path.join(out_dir, "testing_data/X_test_jets.npy"), X_test[1])
     else:
-        np.save(os.path.join(out_dir, "testing_data/X_test.npy"), X_test)
-
-    # np.save(os.path.join(out_dir, "testing_data/y_test.npy"), y_test)
+        np.save(os.path.join(out_dir, "testing_data/X_test_constits.npy"), X_test)
 
     np.save(os.path.join(out_dir, "testing_data/truth_pt_test.npy"), truth_pt_test)
     np.save(os.path.join(out_dir, "testing_data/reco_pt_test.npy"), reco_pt_test)
@@ -88,64 +90,10 @@ def save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test
     np.save(os.path.join(out_dir, "testing_data/truth_mass_test.npy"), truth_mass_test)
     np.save(os.path.join(out_dir, "testing_data/reco_mass_test.npy"), reco_mass_test)
 
-    with open(os.path.join(out_dir, "class_label.json"), "w") as f: json.dump(class_labels, f, indent=4) #Dump output variables
-
     print(f"Test data saved to {out_dir}")
 
-def train_weights(y_train, truth_pt_train, truth_mass_train, class_labels, pt_flat_weighting=True):
-    """
-    Re-balancing the class weights and then flatten them based on truth pT
-    """
-    num_samples = y_train.shape[0]
-    num_classes = y_train.shape[1]
 
-    sample_weights = np.ones(num_samples)
-
-    # Define pT bins
-    pt_bins = np.array([
-        15, 17, 19, 22, 25, 30, 35, 40, 45, 50,
-        60, 76, 97, 122, 154, 195, 246, 311,
-        393, 496, 627, 792, np.inf  # Use np.inf to cover all higher values
-    ])
-    
-    # Initialize counts per class per pT bin
-    class_pt_counts = {}
-    
-    # Calculate counts per class per pT bin
-    for label, idx in class_labels.items():
-        class_mask = y_train[:, idx] == 1
-        class_pt_counts[idx], _ = np.histogram(truth_pt_train[class_mask], bins=pt_bins)
-    
-    # Compute the maximum counts per pT bin over all classes
-    max_counts_per_bin = np.zeros(len(pt_bins)-1)
-    for bin_idx in range(len(pt_bins)-1):
-        counts_in_bin = [class_pt_counts[idx][bin_idx] for idx in class_labels.values()]
-        max_counts_per_bin[bin_idx] = max(counts_in_bin)
-    
-    # Compute weights per class per pT bin
-    weights_per_class_pt_bin = {}
-    for idx in class_labels.values():
-        weights_per_class_pt_bin[idx] = np.zeros(len(pt_bins)-1)
-        for bin_idx in range(len(pt_bins)-1):
-            class_count = class_pt_counts[idx][bin_idx]
-            if class_count == 0:
-                weights_per_class_pt_bin[idx][bin_idx] = 0.
-            else:
-                weights_per_class_pt_bin[idx][bin_idx] = max_counts_per_bin[bin_idx] / class_count
-
-    # Assign weights to samples
-    for idx in class_labels.values():
-        class_mask = y_train[:, idx] == 1
-        class_truth_pt = truth_pt_train[class_mask]
-        sample_indices = np.where(class_mask)[0]
-        bin_indices = np.digitize(class_truth_pt, pt_bins) - 1  # Subtract 1 to get 0-based index
-        bin_indices[bin_indices == len(pt_bins)-1] = len(pt_bins)-2  # Handle right edge
-        sample_weights[sample_indices] = weights_per_class_pt_bin[idx][bin_indices]
-    
-    # Normalize sample weights
-    sample_weights = sample_weights / np.mean(sample_weights)
-
-def train(out_dir, percent, model_name):
+def train(out_dir, percent, model_name, use_jets):
 
     #Remove output dir if exists
     if os.path.exists(out_dir):
@@ -156,68 +104,65 @@ def train(out_dir, percent, model_name):
     os.makedirs(out_dir)
 
     #Load the data, class_labels and input variables name, not really using input variable names to be honest
-    data_train, data_test, class_labels, input_vars, extra_vars = load_data("training_data/", percentage=percent)
-    
+    data_train, data_test, _, input_vars, extra_vars = load_data("training_data/", percentage=percent)
+    print(f"Loaded {len(data_train)} training jets and {len(data_test)} testing jets")
     #Save input variables and extra variables metadata
     with open(os.path.join(out_dir, "input_vars.json"), "w") as f: json.dump(input_vars, f, indent=4) #Dump output variables
     with open(os.path.join(out_dir, "extra_vars.json"), "w") as f: json.dump(extra_vars, f, indent=4) #Dump output variables
 
     #Make into ML-like data for training
-    X_train, pt_target_train, truth_pt_train, reco_pt_train, mass_target_train, truth_mass_train, reco_mass_train = to_ML(data_train, class_labels)
+    X_train, pt_target_train, truth_pt_train, reco_pt_train, mass_target_train, truth_mass_train, reco_mass_train = to_ML(data_train, use_jets)
     
     #Save X_test, y_test, and truth_pt_test for plotting later
-    X_test, _, truth_pt_test, reco_pt_test, _, truth_mass_test, reco_mass_test = to_ML(data_test, class_labels)
-    save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, class_labels)
+    X_test, _, truth_pt_test, reco_pt_test, _, truth_mass_test, reco_mass_test = to_ML(data_test, use_jets)
+    save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, use_jets)
 
-    #Calculate the sample weights for training
-    # sample_weight = train_weights(y_train, truth_pt_train, truth_mass_train, class_labels)    # doesn't return anything, should be none?
-
-    print(len(X_train))
-    if len(X_train) == 2:
-        X_train_constits, X_train_jets = X_train[0], X_train[1]
+    if use_jets:
+        X_train_constits, X_train_jets = X_train
         inputs =  {'constituent_inputs': X_train_constits, 'jet_inputs': X_train_jets}
+        constituents_shape = X_train_constits.shape[1:]     #First dimension is batch size, input shape is NCONSTITUENTS x NFEATURES
+        jets_shape = X_train_jets.shape[1:]    #First dimension is batch size, input shape is NJETS x NFEATURES
     else:
-        # X_train = X_train[0]
         inputs =  {'constituent_inputs': X_train}
-
-    #Get input shape
-    input_shape = (X_train_constits.shape[1:], X_train_jets.shape[1:]) if len(X_train) == 2 else X_train.shape[1:]    #First dimension is batch size, input shape is NCONSTITUENTS x NFEATURES
-    print(input_shape)
-    # output_shape = y_train.shape[1:]
+        constituents_shape = X_train.shape[1:]    #First dimension is batch size, input shape is NCONSTITUENTS x NFEATURES
+        jets_shape = None    #First dimension is batch size, input shape is NJETS x NFEATURES
 
     #Dynamically get the model
     try:
         model_func = getattr(models, model_name)
-        model = model_func(input_shape)  # Assuming the model function doesn't require additional arguments
+        model = model_func(constituents_shape, jets_shape)  # Assuming the model function doesn't require additional arguments
+        plot_model(model, to_file=f"{out_dir}/model.png", show_shapes=True, show_layer_names=True, show_layer_activations=True)
     except AttributeError:
         raise ValueError(f"Model '{model_name}' is not defined in the 'models' module.")
 
     #Train it with a pruned model
-    num_samples = X_train_constits.shape[0] * (1 - VALIDATION_SPLIT)
+    num_samples = inputs["constituent_inputs"].shape[0] * (1 - VALIDATION_SPLIT)
     pruned_model = prune_model(model, num_samples)
 
     #Now fit to the data
     callbacks = [tfmot.sparsity.keras.UpdatePruningStep(),
-                 EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, start_from_epoch=10),
+                 EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, start_from_epoch=1),
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
 
-    from tagger.train.weights import mass_flatten_weights
+    from tagger.train.weights import flatten_weights
+    # weights = flatten_weights(mass_target_train, nBins=31)
+    # print(weights)
 
     history = pruned_model.fit(
         inputs,
-        # {'prune_low_magnitude_mass_output': truth_mass_train },
-        {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': truth_mass_train},
-        sample_weight = mass_flatten_weights(truth_mass_train),
+        {'pT_output': pt_target_train, 'mass_output': mass_target_train },
+        # {'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
+        sample_weight = {"pT_output": flatten_weights(reco_pt_train), "mass_output": flatten_weights(reco_mass_train)},
         epochs = EPOCHS,
         batch_size = BATCH_SIZE,
         verbose = 2,
         validation_split = VALIDATION_SPLIT,
-        callbacks = [callbacks],
+        callbacks = callbacks,
         shuffle = True
         )
     
     #Export the model
-    model_export = tfmot.sparsity.keras.strip_pruning(pruned_model)
+    model_export = pruned_model #tfmot.sparsity.keras.strip_pruning(pruned_model)
 
     export_path = os.path.join(out_dir, "model/saved_model.h5")
     model_export.save(export_path)
@@ -249,6 +194,7 @@ if __name__ == "__main__":
     parser.add_argument('-m','--model', default='baseline', help = 'Model object name to train on')
     parser.add_argument('-n','--name', default='baseline', help = 'Model experiment name')
     parser.add_argument('-t','--tree', default='outnano/Jets', help = 'Tree within the ntuple containing the jets')
+    parser.add_argument('--use-jets', action='store_true', help='Tell model if to expect jet-level features')
 
     #Basic ploting
     parser.add_argument('--plot-basic', action='store_true', help='Plot all the basic performance if set')
@@ -279,11 +225,8 @@ if __name__ == "__main__":
         with mlflow.start_run(run_name=args.name) as run:
             mlflow.set_tag('gitlab.CI_JOB_ID', os.getenv('CI_JOB_ID'))
             mlflow.keras.autolog()
-            train(args.output, args.percent, model_name=args.model)
+            train(args.output, args.percent, model_name=args.model, use_jets=args.use_jets)
             run_id = run.info.run_id
         sourceFile = open('mlflow_run_id.txt', 'w')
         print(run_id, end="", file = sourceFile)
         sourceFile.close()
-
-        
-        

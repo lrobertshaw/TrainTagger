@@ -18,7 +18,7 @@ def _add_response_vars(data):
     data['jet_ptCorr_div_ptGen'] = ak.nan_to_num(data['jet_pt_corr']/data['jet_genmatch_pt'], copy=True, nan=0.0, posinf=0., neginf=0.)
     data['jet_ptRaw_div_ptGen'] = ak.nan_to_num(data['jet_pt_raw']/data['jet_genmatch_pt'], copy=True, nan=0.0, posinf=0., neginf=0.)
 
-def _split_flavor(data):
+def _define_target(data):
     """
     Splits data by particle flavor and applies conditions for each category. Also creates the pT target.
 
@@ -29,108 +29,26 @@ def _split_flavor(data):
         dict: A dictionary containing the split data by label.
     """
 
-    genmatch_base = (data['jet_genmatch_pt'] > 0) & (data['jet_genmatch_mass'] > 0)    # Only jets matched to a gen jet
+    genmatch_base = (data['jet_genmatch_pt'] > 0) | (data['jet_genmatch_mass'] > 0)    # Only jets matched to a gen jet
+    data = data[genmatch_base]
 
-    # Define conditions for each label
-    conditions = {
-        "b": ( # Bottom
-            genmatch_base &
-            (data['jet_muflav'] == 0) &
-            (data['jet_tauflav'] == 0) &
-            (data['jet_elflav'] == 0) &
-            (data['jet_genmatch_hflav'] == 5)
-        ),
-        "charm": ( # Charm
-            genmatch_base &
-            (data['jet_muflav'] == 0) &
-            (data['jet_tauflav'] == 0) &
-            (data['jet_elflav'] == 0) &
-            (data['jet_genmatch_hflav'] == 4)
-        ),
-        "light": ( # uds
-            genmatch_base &
-            (data['jet_muflav'] == 0) &
-            (data['jet_tauflav'] == 0) &
-            (data['jet_elflav'] == 0) &
-            (data['jet_genmatch_hflav'] == 0) &
-            ((abs(data['jet_genmatch_pflav']) == 0) | (abs(data['jet_genmatch_pflav']) == 1) | (abs(data['jet_genmatch_pflav']) == 2) | (abs(data['jet_genmatch_pflav']) == 3))
-        ),
-        "gluon": ( # Gluon
-            genmatch_base &
-            (data['jet_muflav'] == 0) &
-            (data['jet_tauflav'] == 0) &
-            (data['jet_elflav'] == 0) &
-            (data['jet_genmatch_hflav'] == 0) &
-            (data['jet_genmatch_pflav'] == 21)
-        ),
-        "taup": ( # Tau +
-            genmatch_base &
-            (data['jet_muflav'] == 0) &
-            (data['jet_tauflav'] == 1) &
-            (data['jet_taucharge'] > 0) &
-            (data['jet_elflav'] == 0)
-        ),
-        "taum": ( # Tau -
-            genmatch_base &
-            (data['jet_muflav'] == 0) &
-            (data['jet_tauflav'] == 1) &
-            (data['jet_taucharge'] < 0) &
-            (data['jet_elflav'] == 0)
-        ),
-        "muon": ( # muon
-            genmatch_base &
-            (data['jet_muflav'] == 1) &
-            (data['jet_tauflav'] == 0) &
-            (data['jet_elflav'] == 0)
-        ),
-        "electron": ( # electron
-            genmatch_base &
-            (data['jet_muflav'] == 0) &
-            (data['jet_tauflav'] == 0) &
-            (data['jet_elflav'] == 1)
-        ),
-    }
+    clipped_l1_mass, clipped_gen_mass = np.clip( data["jet_mass"], 1, 128 ), np.clip( data["jet_genmatch_mass"], 1, 128 )
+    log_l1_mass, log_gen_mass = np.log2( clipped_l1_mass ), np.log2( clipped_gen_mass )
+    clipped_log_mass_ratio = np.clip( log_gen_mass / log_l1_mass, 0.5, 2 )
 
-    # Automatically generate class labels based on the order of keys in conditions
-    class_labels = {label: idx for idx, label in enumerate(conditions)}
+    pt_ratio = ak.nan_to_num( data["jet_genmatch_pt"] / data["jet_pt_phys"], nan=0, posinf=0, neginf=0)
+    data['target_pt'] = np.clip(pt_ratio, 0.3, 3)
+    data['target_pt_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_pt"], nan=0, posinf=0, neginf=0 ), 0, 1500)
 
-    # Initialize the new array in data for numeric labels with default -1 for unmatched entries
-    data['class_label'] = ak.full_like(data['jet_genmatch_pt'], -1)
-
-    # Assign numeric values based on conditions using awkward's where function
-    for label, condition in conditions.items():
-        data['class_label'] = ak.where(condition, class_labels[label], data['class_label'])
-
-    #Set pt regression target
-    hadrons = (conditions["b"] | conditions["charm"] | conditions["light"] | conditions["gluon"])
-    leptons = (conditions["taup"] | conditions["taum"] | conditions["muon"] | conditions["electron"])
-
-    hadron_pt_ratio = ak.nan_to_num( data["jet_genmatch_pt"] / data["jet_pt_phys"], nan=0, posinf=0, neginf=0)
-    lepton_pt_ratio = ak.nan_to_num( data["jet_genmatch_lep_vis_pt"] / data["jet_pt_phys"],nan=0, posinf=0,neginf=0)
-
-    hadron_pt = ak.nan_to_num( data["jet_genmatch_pt"], nan=0, posinf=0, neginf=0 )
-    lepton_pt = ak.nan_to_num( data["jet_genmatch_lep_vis_pt"], nan=0, posinf=0, neginf=0 )
-
-    data['target_pt'] = np.clip(hadrons * hadron_pt_ratio + leptons * lepton_pt_ratio, 0.3, 2)
-    data['target_pt_phys'] = (hadrons * hadron_pt) + (leptons * lepton_pt)
-
-    # Set mass regression target
-    compress_mass = lambda mass: (np.clip(mass, 8, 128) - 8) / (128 - 8)
-    compressed_mass_ratio = ak.nan_to_num( compress_mass(data["jet_genmatch_mass"]) / compress_mass(data["jet_mass"]), nan=0, posinf=0, neginf=0 )
-    data["target_mass"] = np.clip(compressed_mass_ratio, 0.3, 3)
-    data['target_mass_phys'] = np.clip( data["jet_genmatch_mass"], 0, 256 )
+    mass_ratio = ak.nan_to_num( data["jet_genmatch_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
+    data["target_mass"] = np.clip(mass_ratio, 0.3, 3)
+    data['target_mass_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0 ), 0, 128)
 
     # Apply pt_cut and mass_cut
     jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 15.0), (data['target_mass_phys'] > 5.0)
-    for key in conditions: conditions[key] = conditions[key] & jet_ptmin_gen & jet_massmin_gen
 
-    # Sanity check for data consistency
-    split_data_sum = sum(sum(conditions[label]) for label, condition in conditions.items())
-    if split_data_sum != len(data[jet_ptmin_gen & jet_massmin_gen]):
-        raise ValueError(f"Data splitting error: Total entries ({split_data_sum}) do not match the filtered data length ({len(data[jet_ptmin_gen & jet_massmin_gen])}).")
-
-    return data, class_labels
-    return data[jet_ptmin_gen & jet_massmin_gen], class_labels
+    return data[jet_ptmin_gen & jet_massmin_gen]
+    
 
 def _get_pfcand_fields(tag):
     
@@ -259,7 +177,8 @@ def _process_chunk(data_split, tag, extras, jet_features_tag, n_parts, chunk, ou
     extra_features = _get_pfcand_fields(extras)
 
     #Save them to a root file
-    save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features
+    # save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features
+    save_fields=['nn_inputs', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features    #target_pt_phys
 
     if jet_features_tag is not None:
         _make_nn_jet_inputs(data_split, jet_features_tag)
@@ -333,17 +252,20 @@ def group_id_values(event_id, *arrays, num_elements = 2):
 
     return grouped_id[mask], filtered_grouped_arrays
 
-def to_ML(data, class_labels):
+def to_ML(data, use_jets):
     """
     Take in the data from make_data (loaded by load_data) and make them ready for training.
     """
 
-    try:
-        X = ( np.asarray(data['nn_inputs']), np.asarray(data['nn_jet_inputs']) )
-    except:
-        print("Warning: jet-level features not found in data. Loading only constituent-level inputs.")
-        X = np.asarray(data['nn_inputs'])
-    # y = tf.keras.utils.to_categorical(np.asarray(data['class_label']), num_classes=len(class_labels))
+    if use_jets:
+        try:
+            features = ( np.asarray(data['nn_inputs']), np.asarray(data['nn_jet_inputs']) )
+            # features = data["nn_inputs"], data["nn_jet_inputs"]
+        except KeyError: raise KeyError("Error: jet-level features not found in data. Please check your dataset or the tag used.")
+    else:
+        features = np.asarray(data['nn_inputs'])
+        # features = data["nn_inputs"]
+    
     pt_target = np.asarray(data['target_pt'])
     truth_pt = np.asarray(data['target_pt_phys'])
     reco_pt = np.asarray(data['jet_pt_phys'])
@@ -352,7 +274,7 @@ def to_ML(data, class_labels):
     truth_mass = np.asarray(data['target_mass_phys'])
     reco_mass = np.asarray(data['jet_mass'])
 
-    return X, pt_target, truth_pt, reco_pt, mass_target, truth_mass, reco_mass
+    return features, pt_target, truth_pt, reco_pt, mass_target, truth_mass, reco_mass
 
 def load_data(outdir, percentage, test_ratio=0.15, fields=None):
     """
@@ -378,13 +300,15 @@ def load_data(outdir, percentage, test_ratio=0.15, fields=None):
         metadata = json.load(f)
 
     total_chunks = len(metadata)
-    chunks_to_load = int(np.ceil((percentage / 100) * total_chunks))
-
-    # Collect the file paths for the chunks to load
-    chunk_files = [metadata[i]["file"] for i in range(chunks_to_load)]
+    print(total_chunks, " chunks found in metadata")
+    chunks_to_load = int(np.floor((percentage / 100) * total_chunks))
+    print(f"Loading {chunks_to_load} chunks out of {total_chunks} ({percentage}%)")
 
     # Use uproot.concatenate to load and combine data from multiple files
+    # data = uproot.concatenate(chunk_files, filter_name=fields, library="ak")
+    chunk_files = [metadata[int(i*np.floor((1 / (percentage/100))))]["file"] + ":data" for i in range(chunks_to_load)]
     data = uproot.concatenate(chunk_files, filter_name=fields, library="ak")
+
     print(data)
     # Shuffle the data indices
     total_data_len = len(data)
@@ -403,11 +327,11 @@ def load_data(outdir, percentage, test_ratio=0.15, fields=None):
     data_metadata_file  = os.path.join(outdir, "variables.json")
     with open(data_metadata_file, "r") as f:
         variables = json.load(f)
-        class_labels = variables['outputs']
+        targets = variables['outputs']
         input_vars = variables['inputs']
         extra_vars = variables['extras']
     
-    return train_data, test_data, class_labels, input_vars, extra_vars
+    return train_data, test_data, targets, input_vars, extra_vars
 
 def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src/TrainTagger/sc8Jets.root', 
               outdir='training_data/',
@@ -426,6 +350,7 @@ def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src
         outdir (str): The output directory.
         tag (str): Input tags to use from pfcands, defined in pfcand_fields.yml.
         extras (str): Extra fields to store for plotting, defined in pfcand_fields.yml
+        jet_features_tag (str): Jet features to use from pfcands, defined in pfcand_fields.yml.
         n_parts (int): Number of constituent particles to use for tagging.
         fraction (float) : fraction from (0-1) of data to process for training/testing
         step_size (str): Step size for uproot iteration.
@@ -448,29 +373,35 @@ def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src
     #Loop through the entries
     num_entries = uproot.open(infile)[tree].num_entries
     num_entries_done = 0
-    num_entries_survived = 0
+    removedByL1Cuts = 0
+    removedByGenSel = 0
     chunk = 0
     print(f"Total entries: {num_entries}")
     for data in uproot.iterate(infile, filter_name=FILTER_PATTERN, how="zip", step_size=step_size, max_workers=8):
         
         nEntries = len(data)
-        #Define jet kinematic cuts
+        #Define basic jet kinematic cuts
         jet_cut = (data['jet_pt_phys'] > 15) & (np.abs(data['jet_eta_phys']) < 2.4) & (data['jet_reject'] == 0) & (data['jet_mass'] > 5)
         data = data[jet_cut]
-        num_entries_survived += len(data)
-        print("AFTER L1 CUTS:")
-        print(data)
-        #Add additional response variables
-        # _add_response_vars(data)
-        #Split data into all the training classes
-        data_split, class_labels = _split_flavor(data)
-        print("AFTER FLAVOR SPLIT:")
-        print(data_split)
+        nEntriesAfterL1Cuts = len(data)
+        removedByL1Cuts += (nEntries - nEntriesAfterL1Cuts)    # num_entries_survived += len(data)
+
+        data = _define_target(data)
+        nEntriesAfterL1AndGenCuts = len(data)
+        removedByGenSel += (nEntriesAfterL1Cuts - nEntriesAfterL1AndGenCuts)
+
+        if nEntriesAfterL1AndGenCuts == 0:
+            print(f"Warning! No entries survived the cuts and selection in chunk {chunk}.")
+            print(f"    Initial number of entries in chunk: {nEntries}")
+            print(f"    Entries removed by level-1 cuts: {removedByL1Cuts}")
+            print(f"    Entries removed by gen selection: {removedByGenSel}")
+            print(f"    Total entries remaining in chunk: {nEntriesAfterL1AndGenCuts}")
+
         #If first chunk then save metadata of the dataset
         if chunk == 0: _save_dataset_metadata(outdir, tag, extras, jet_features_tag)
 
         #Process and save training data for a given feature set
-        _process_chunk(data_split, tag=tag, extras=extras, jet_features_tag=jet_features_tag, n_parts=n_parts, chunk=chunk, outdir=outdir)
+        _process_chunk(data, tag=tag, extras=extras, jet_features_tag=jet_features_tag, n_parts=n_parts, chunk=chunk, outdir=outdir)
 
         #Number of chunk for indexing files
         chunk += 1
@@ -478,4 +409,7 @@ def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src
         print(f"Processed {num_entries_done}/{num_entries} entries | {np.round(num_entries_done / num_entries * 100, 1)}%")
         if num_entries_done / num_entries >= ratio: break
 
-    print(f"{num_entries - num_entries_survived} entries removed by cuts")
+    print(f"\nTotal entries processed: {num_entries_done} out of {num_entries}")
+    print(f"{removedByL1Cuts} entries removed by level-1 cuts")
+    print(f"{removedByGenSel} entries removed by subsequent gen selection")
+    print(f"Total entries saved: {num_entries_done - removedByL1Cuts - removedByGenSel} out of {num_entries_done}")
