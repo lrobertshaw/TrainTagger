@@ -61,10 +61,10 @@ def baseline(constituents_shape, jets_shape=None):
     constituent_input = Input(shape=constituents_shape, name='constituent_inputs')
 
     # #Main branch
-    constituent_input_norm = BatchNormalization(name='norm_input')(constituent_input)
+    # constituent_input_norm = BatchNormalization(name='norm_input')(constituent_input)
     
     # #First Conv1D
-    main = Conv1D(filters=32, kernel_size=1, name='Conv1D_1')(constituent_input_norm)
+    main = Conv1D(filters=32, kernel_size=1, name='Conv1D_1')(constituent_input)
     main = Activation(activation=activations.relu, name='relu_1')(main)
 
     # #Second Conv1D
@@ -76,8 +76,8 @@ def baseline(constituents_shape, jets_shape=None):
     constituent_features = GlobalAveragePooling1D(name='avgpool')(main)
     
     jet_input = Input(shape=jets_shape, name='jet_inputs') # Shape is (n_jet_features,)
-    jet_input_norm = BatchNormalization(name='norm_jet_input')(jet_input)
-    features = Concatenate(name='combine_features')([constituent_features, jet_input_norm]) # Shape: (batch_size, 10 + n_jet_features)
+    # jet_input_norm = BatchNormalization(name='norm_jet_input')(jet_input)
+    features = Concatenate(name='combine_features')([constituent_features, jet_input]) # Shape: (batch_size, 10 + n_jet_features)
 
     # pt regression branch
     pt_regress = Dense(16, name='Dense_1_pt')(features)

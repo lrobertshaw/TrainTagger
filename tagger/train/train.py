@@ -28,8 +28,8 @@ tf.config.threading.set_intra_op_parallelism_threads(num_threads)
 
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
 tf.keras.utils.set_random_seed(420) #not a special number 
-BATCH_SIZE = 64 #1024
-EPOCHS = 10
+BATCH_SIZE = 256 #1024
+EPOCHS = 20
 VALIDATION_SPLIT = 0.2
 
 # Sparsity parameters
@@ -132,7 +132,7 @@ def train(out_dir, percent, model_name, use_jets):
         model_func = getattr(models, model_name)
         model = model_func(constituents_shape, jets_shape)  # Assuming the model function doesn't require additional arguments
         plot_model(model, to_file=f"{out_dir}/model.png", show_shapes=True, show_layer_names=True, show_layer_activations=True)
-    except AttributeError:
+    except:
         raise ValueError(f"Model '{model_name}' is not defined in the 'models' module.")
 
     #Train it with a pruned model
@@ -150,9 +150,9 @@ def train(out_dir, percent, model_name, use_jets):
 
     history = pruned_model.fit(
         inputs,
-        {'pT_output': pt_target_train, 'mass_output': mass_target_train },
+        {'pT_output': truth_pt_train, 'mass_output': truth_mass_train },
         # {'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
-        sample_weight = {"pT_output": flatten_weights(reco_pt_train), "mass_output": flatten_weights(reco_mass_train)},
+        sample_weight = {"pT_output": flatten_weights(reco_pt_train, 0, 1500, 76), "mass_output": flatten_weights(reco_mass_train, 0, 180, 61)},
         epochs = EPOCHS,
         batch_size = BATCH_SIZE,
         verbose = 2,
@@ -185,7 +185,7 @@ if __name__ == "__main__":
     parser.add_argument('--make-data', action='store_true', help='Prepare the data if set.')
     parser.add_argument('-i','--input', default='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src/FastPUPPI/condor/jobs/lightHbb_M20to80_Pt50to200_1745321368/data/lightH.root' , help = 'Path to input training data')
     parser.add_argument('-r','--ratio', default=1, type=float, help = 'Ratio (0-1) of the input data root file to process')
-    parser.add_argument('-s','--step', default='100MB' , help = 'The maximum memory size to process input root file')
+    parser.add_argument('-s','--step', default='10MB' , help = 'The maximum memory size to process input root file')
     parser.add_argument('-e','--extras', default='extra_fields', help= 'Which extra fields to add to output tuples, in pfcand_fields.yml')
 
     #Training argument
