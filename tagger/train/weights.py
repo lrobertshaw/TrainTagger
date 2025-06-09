@@ -46,7 +46,7 @@ def flatten_weights(var, nBins=31):
     num_samples = var.shape[0]
     sample_weights = np.ones(num_samples)
 
-    bins = np.linspace(min(var), max(var), nBins)
+    bins = np.linspace(0, max(var), nBins)
 
     # Count how many jets fall into each mass bin
     counts, _ = np.histogram(var, bins=bins)

@@ -16,43 +16,6 @@ from qkeras import QConv1D
 
 from tensorflow.keras.layers import BatchNormalization, Input, Dense, Activation, GlobalAveragePooling1D, GlobalMaxPooling1D, Flatten, Concatenate, Conv1D
 from keras import activations
-# def baseline(constituents_shape, jets_shape):
-#     print('Using model: "baseline"')
-
-#     # #Initialize inputs
-#     constituent_input = Input(shape=constituents_shape, name='constituent_inputs')
-
-#     # #Main branch
-#     constituent_input_norm = BatchNormalization(name='norm_input')(constituent_input)
-    
-#     # #First Conv1D
-#     main = Conv1D(filters=32, kernel_size=1, name='Conv1D_1')(constituent_input_norm)
-#     main = Activation(activation=activations.relu, name='relu_1')(main)
-
-#     # #Second Conv1D
-#     main = Conv1D(filters=16, kernel_size=1, name='Conv1D_2')(main)
-#     main = Activation(activation=activations.relu, name='relu_2')(main)
-
-#     # # Linear activation to change HLS bitwidth to fix overflow in AveragePooling
-#     # main = Activation(activation=activations.relu, name = 'act_pool')(main)
-#     constituent_features = GlobalAveragePooling1D(name='avgpool')(main)
-    
-#     jet_input = Input(shape=jets_shape, name='jet_inputs') # Shape is (n_jet_features,)
-#     jet_input_norm = BatchNormalization(name='norm_jet_input')(jet_input)
-#     features = Concatenate(name='combine_features')([constituent_features, jet_input_norm]) # Shape: (batch_size, 10 + n_jet_features)
-
-#     # pt regression branch
-#     pt_regress = Dense(16, name='Dense_1_pT')(features)
-#     pt_regress = Activation(activation=activations.relu, name='relu_1_pt')(pt_regress)
-#     pt_regress = Dense(8, name='Dense_2_pT')(pt_regress)
-#     pt_regress = Activation(activation=activations.relu, name='relu_2_pt')(pt_regress)
-#     pt_regress = Dense(1, name='pT_output')(pt_regress)
-
-#     # model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[pt_regress], name="baseline")
-#     model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[pt_regress], name="baseline")
-#     print(model.summary())
-
-#     return model
 
 def baseline(constituents_shape, jets_shape=None):
     print('Using model: "baseline"')
@@ -93,7 +56,6 @@ def baseline(constituents_shape, jets_shape=None):
     mass_regress = Activation(activation=activations.relu, name='relu_2_mass')(mass_regress)
     mass_regress = Dense(1, name='mass_output')(mass_regress)
 
-    # model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[pt_regress], name="baseline")
     model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[pt_regress, mass_regress], name="baseline")
     print(model.summary())
 
