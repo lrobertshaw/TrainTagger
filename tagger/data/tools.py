@@ -32,9 +32,9 @@ def _define_target(data):
     genmatch_base = (data['jet_genmatch_pt'] > 0) | (data['jet_genmatch_mass'] > 0)    # Only jets matched to a gen jet
     data = data[genmatch_base]
 
-    clipped_l1_mass, clipped_gen_mass = np.clip( data["jet_mass"], 1, 128 ), np.clip( data["jet_genmatch_mass"], 1, 128 )
-    log_l1_mass, log_gen_mass = np.log2( clipped_l1_mass ), np.log2( clipped_gen_mass )
-    clipped_log_mass_ratio = np.clip( log_gen_mass / log_l1_mass, 0.5, 2 )
+    # clipped_l1_mass, clipped_gen_mass = np.clip( data["jet_mass"], 1, 128 ), np.clip( data["jet_genmatch_mass"], 1, 128 )
+    # log_l1_mass, log_gen_mass = np.log2( clipped_l1_mass ), np.log2( clipped_gen_mass )
+    # clipped_log_mass_ratio = np.clip( log_gen_mass / log_l1_mass, 0.5, 2 )
 
     pt_ratio = ak.nan_to_num( data["jet_genmatch_pt"] / data["jet_pt_phys"], nan=0, posinf=0, neginf=0)
     data['target_pt'] = np.clip(pt_ratio, 0.3, 3)
@@ -42,7 +42,7 @@ def _define_target(data):
 
     mass_ratio = ak.nan_to_num( data["jet_genmatch_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
     data["target_mass"] = np.clip(mass_ratio, 0.3, 3)
-    data['target_mass_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0 ), 0, 128)
+    data['target_mass_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0 ), 0, 182)
 
     # Apply pt_cut and mass_cut
     jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 15.0), (data['target_mass_phys'] > 5.0)
@@ -256,14 +256,16 @@ def to_ML(data, use_jets):
     """
     Take in the data from make_data (loaded by load_data) and make them ready for training.
     """
+    keepExtras = False
+    constit_feats = np.asarray(data["nn_inputs"]) if keepExtras else np.asarray(data["nn_inputs"])[:,:-4]    # exclude E, px, py and pz
 
     if use_jets:
         try:
-            features = ( np.asarray(data['nn_inputs']), np.asarray(data['nn_jet_inputs']) )
+            features = ( constit_feats, np.asarray(data['nn_jet_inputs']) )
             # features = data["nn_inputs"], data["nn_jet_inputs"]
         except KeyError: raise KeyError("Error: jet-level features not found in data. Please check your dataset or the tag used.")
     else:
-        features = np.asarray(data['nn_inputs'])
+        features = constit_feats
         # features = data["nn_inputs"]
     
     pt_target = np.asarray(data['target_pt'])
