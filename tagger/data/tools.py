@@ -38,7 +38,7 @@ def _define_target(data):
 
     pt_ratio = ak.nan_to_num( data["jet_genmatch_pt"] / data["jet_pt_phys"], nan=0, posinf=0, neginf=0)
     data['target_pt'] = np.clip(pt_ratio, 0.3, 3)
-    data['target_pt_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_pt"], nan=0, posinf=0, neginf=0 ), 0, 1500)
+    data['target_pt_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_pt"], nan=0, posinf=0, neginf=0 ), 0, 2000)
 
     mass_ratio = ak.nan_to_num( data["jet_genmatch_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
     data["target_mass"] = np.clip(mass_ratio, 0.3, 3)
