@@ -71,7 +71,7 @@ def prune_model(model, num_samples):
     #                          'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
     #                          })
 
-    print(pruned_model.summary())
+    # print(pruned_model.summary())
 
     return pruned_model
 
