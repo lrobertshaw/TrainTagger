@@ -28,7 +28,7 @@ tf.config.threading.set_intra_op_parallelism_threads(num_threads)
 
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
 tf.keras.utils.set_random_seed(420) #not a special number 
-BATCH_SIZE = 64 #1024
+BATCH_SIZE = 256 #1024
 EPOCHS = 50
 VALIDATION_SPLIT = 0.2
 
