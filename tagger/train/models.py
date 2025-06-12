@@ -77,11 +77,11 @@ def qbaseline(constituents_shape, jets_shape=None, bits=9, bits_int=2, alpha_val
     main = BatchNormalization(name='norm_input')(constituent_input)
     
     #First Conv1D
-    main = QConv1D(filters=32, kernel_size=1, name='Conv1D_1', **common_args)(main)
+    main = QConv1D(filters=10, kernel_size=1, name='Conv1D_1', **common_args)(main)
     main = QActivation(activation=quantized_relu(bits), name='relu_1')(main)
 
     #Second Conv1D
-    main = QConv1D(filters=16, kernel_size=1, name='Conv1D_2', **common_args)(main)
+    main = QConv1D(filters=10, kernel_size=1, name='Conv1D_2', **common_args)(main)
     main = QActivation(activation=quantized_relu(bits), name='relu_2')(main)
 
     # Linear activation to change HLS bitwidth to fix overflow in AveragePooling
