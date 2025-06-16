@@ -29,21 +29,52 @@ def _define_target(data):
         dict: A dictionary containing the split data by label.
     """
 
-    genmatch_base = (data['jet_genmatch_pt'] > 0) | (data['jet_genmatch_mass'] > 0)    # Only jets matched to a gen jet
+    genmatch_base = (data['jet_genmatch_pt'] >= 0) | (data['jet_genmatch_mass'] >= 0)    # Only jets matched to a gen jet
     data = data[genmatch_base]
 
+        # Define conditions for each label
+    conditions = {
+        "H": (
+            (abs(data['jet_genmatch_pdg']) == 25) & (data["jet_genmatch_Nprongs"] >= 2)
+        ),
+        "W": (
+            (abs(data['jet_genmatch_pdg']) == 24) & (data["jet_genmatch_Nprongs"] >= 2)
+        ),
+        "Z": (
+            (abs(data['jet_genmatch_pdg']) == 23) & (data["jet_genmatch_Nprongs"] >= 2)
+        )
+        # "two_prong": (
+        #     data["jet_genmatch_Nprongs"] >= 2
+        # ),
+        # "one_prong": (
+        #     data["jet_genmatch_Nprongs"] <= 1
+        # ),
+    }
+
+    # Automatically generate class labels based on the order of keys in conditions
+    class_labels = {label: idx for idx, label in enumerate(conditions)}
+
+    # Initialize the new array in data for numeric labels with default -1 for unmatched entries
+    data['class_label'] = ak.full_like(data['jet_genmatch_pt'], -1)
+
+    # Assign numeric values based on conditions using awkward's where function
+    for label, condition in conditions.items():
+        data['class_label'] = ak.where(condition, class_labels[label], data['class_label'])
+
+    # Set pT targets
     pt_ratio = ak.nan_to_num( data["jet_genmatch_pt"] / data["jet_pt_phys"], nan=0, posinf=0, neginf=0)
     data['target_pt'] = np.clip(pt_ratio, 0.3, 3)
-    data['target_pt_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_pt"], nan=0, posinf=0, neginf=0 ), 0, 1500)
+    data['target_pt_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_pt"], nan=0, posinf=0, neginf=0 ), 0, 2000)
 
+    # Set mass targets
     mass_ratio = ak.nan_to_num( data["jet_genmatch_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
     data["target_mass"] = np.clip(mass_ratio, 0.3, 3)
-    data['target_mass_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0 ), 0, 182)
+    data['target_mass_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0 ), 0, 256)
 
     # Apply pt_cut and mass_cut
     jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 15.0), (data['target_mass_phys'] > 5.0)
 
-    return data[jet_ptmin_gen & jet_massmin_gen]
+    return data[jet_ptmin_gen & jet_massmin_gen], class_labels
     
 
 def _get_pfcand_fields(tag):
@@ -145,16 +176,16 @@ def _save_chunk_metadata(metadata_file, chunk, entries, outfile):
 
     return
 
-def _save_dataset_metadata(outdir, tag, extras, jet_features_tag):
+def _save_dataset_metadata(outdir, class_labels, tag, extras, jet_features_tag):
 
     dataset_metadata_file = os.path.join(outdir, 'variables.json')
 
     if jet_features_tag is None:
-        metadata = {"outputs": ["pt", "mass"],
-                "inputs": _get_pfcand_fields(tag),
-                "extras": _get_pfcand_fields(extras)}
+        metadata = {"outputs": class_labels, #["pt", "mass"],
+                    "inputs": _get_pfcand_fields(tag),
+                    "extras": _get_pfcand_fields(extras)}
     else:
-        metadata = {"outputs": ["pt", "mass"],
+        metadata = {"outputs": class_labels, #["pt", "mass"],
                     "inputs": _get_pfcand_fields(tag),
                     "extras": _get_pfcand_fields(extras),
                     "jet_level_inputs": _get_pfcand_fields(jet_features_tag)}
@@ -174,7 +205,7 @@ def _process_chunk(data_split, tag, extras, jet_features_tag, n_parts, chunk, ou
 
     #Save them to a root file
     # save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features
-    save_fields=['nn_inputs', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features    #target_pt_phys
+    save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys', 'target_mass', 'target_mass_phys'] + extra_features    #target_pt_phys
 
     if jet_features_tag is not None:
         _make_nn_jet_inputs(data_split, jet_features_tag)
@@ -331,14 +362,14 @@ def load_data(outdir, percentage, test_ratio=0.15, fields=None):
     
     return train_data, test_data, targets, input_vars, extra_vars
 
-def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src/TrainTagger/sc8Jets.root', 
+def make_data(infile='./sc8_signal.root', 
               outdir='training_data/',
               tag=INPUT_TAG,
               extras=EXTRA_FIELDS,
               jet_features_tag=JET_FIELDS,
               n_parts=N_PARTICLES,
               ratio=1.0,
-              step_size="100MB",
+              step_size="10MB",
               tree="outnano/Jets"):
     """
     Process the data set in chunks from the input ntuples file.
@@ -384,7 +415,7 @@ def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src
         nEntriesAfterL1Cuts = len(data)
         removedByL1Cuts += (nEntries - nEntriesAfterL1Cuts)    # num_entries_survived += len(data)
 
-        data = _define_target(data)
+        data, labels = _define_target(data)
         nEntriesAfterL1AndGenCuts = len(data)
         removedByGenSel += (nEntriesAfterL1Cuts - nEntriesAfterL1AndGenCuts)
 
@@ -396,7 +427,7 @@ def make_data(infile='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src
             print(f"    Total entries remaining in chunk: {nEntriesAfterL1AndGenCuts}")
 
         #If first chunk then save metadata of the dataset
-        if chunk == 0: _save_dataset_metadata(outdir, tag, extras, jet_features_tag)
+        if chunk == 0: _save_dataset_metadata(outdir, labels, tag, extras, jet_features_tag)
 
         #Process and save training data for a given feature set
         _process_chunk(data, tag=tag, extras=extras, jet_features_tag=jet_features_tag, n_parts=n_parts, chunk=chunk, outdir=outdir)

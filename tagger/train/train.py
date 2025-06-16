@@ -163,7 +163,7 @@ if __name__ == "__main__":
 
     #Making input arguments
     parser.add_argument('--make-data', action='store_true', help='Prepare the data if set.')
-    parser.add_argument('-i','--input', default='/eos/home-l/lroberts/mass_regression/CMSSW_14_2_0_pre2/src/FastPUPPI/condor/jobs/lightHbb_M20to80_Pt50to200_1745321368/data/lightH.root' , help = 'Path to input training data')
+    parser.add_argument('-i','--input', default='./sc8_signal.root' , help = 'Path to input training data')
     parser.add_argument('-r','--ratio', default=1, type=float, help = 'Ratio (0-1) of the input data root file to process')
     parser.add_argument('-s','--step', default='10MB' , help = 'The maximum memory size to process input root file')
     parser.add_argument('-e','--extras', default='extra_fields', help= 'Which extra fields to add to output tuples, in pfcand_fields.yml')
