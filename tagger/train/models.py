@@ -43,11 +43,11 @@ def baseline(constituents_shape, jets_shape=None):
     features = Concatenate(name='combine_features')([constituent_features, jet_input_norm]) # Shape: (batch_size, 10 + n_jet_features)
 
     # pt regression branch
-    pt_regress = Dense(16, name='Dense_1_pt')(features)
-    pt_regress = Activation(activation=activations.relu, name='relu_1_pt')(pt_regress)
-    pt_regress = Dense(8, name='Dense_2_pt')(pt_regress)
-    pt_regress = Activation(activation=activations.relu, name='relu_2_pt')(pt_regress)
-    pt_regress = Dense(1, name='pT_output')(pt_regress)
+    # pt_regress = Dense(16, name='Dense_1_pt')(features)
+    # pt_regress = Activation(activation=activations.relu, name='relu_1_pt')(pt_regress)
+    # pt_regress = Dense(8, name='Dense_2_pt')(pt_regress)
+    # pt_regress = Activation(activation=activations.relu, name='relu_2_pt')(pt_regress)
+    # pt_regress = Dense(1, name='pT_output')(pt_regress)
     
     # mass regression branch
     mass_regress = Dense(16, name='Dense_1_mass')(features)
@@ -56,7 +56,7 @@ def baseline(constituents_shape, jets_shape=None):
     mass_regress = Activation(activation=activations.relu, name='relu_2_mass')(mass_regress)
     mass_regress = Dense(1, name='mass_output')(mass_regress)
 
-    model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[pt_regress, mass_regress], name="baseline")
+    model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[mass_regress], name="baseline")
     print(model.summary())
 
     return model
@@ -97,7 +97,7 @@ def qbaseline(constituents_shape, jets_shape=None, bits=9, bits_int=2, alpha_val
         main = Concatenate(name='combine_features')([main, norm_jet_input]) # Shape: (batch_size, 10 + n_jet_features)
         inputs["jet_inputs"] = jet_input
 
-    # mass regression branch
+    # pt regression branch
     pt_regress = QDense(10, name='Dense_1_pT', **common_args)(main)
     pt_regress = QActivation(activation=quantized_relu(bits), name='relu_1_pt')(pt_regress)
     # pt_regress = QDense(8, name='Dense_2_pT', **common_args)(pt_regress)

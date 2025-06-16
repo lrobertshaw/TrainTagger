@@ -29,7 +29,7 @@ tf.config.threading.set_intra_op_parallelism_threads(num_threads)
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
 tf.keras.utils.set_random_seed(420) #not a special number 
 BATCH_SIZE = 256 #1024
-EPOCHS = 50
+EPOCHS = 200
 VALIDATION_SPLIT = 0.2
 
 # Sparsity parameters
@@ -50,19 +50,7 @@ def prune_model(model, num_samples):
     pruning_params = {'pruning_schedule': tfmot.sparsity.keras.PolynomialDecay(initial_sparsity=I_SPARSITY, final_sparsity=F_SPARSITY, begin_step=0, end_step=end_step)}
     pruned_model = tfmot.sparsity.keras.prune_low_magnitude(model, **pruning_params)
 
-    pruned_model.compile(optimizer='adam',
-                         loss = {
-                             'prune_low_magnitude_pT_output': 'mape',
-                             'prune_low_magnitude_mass_output': 'mape'
-                             },
-                         metrics = {
-                             'prune_low_magnitude_pT_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error'],
-                             'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
-                             },
-                         weighted_metrics = {
-                             'prune_low_magnitude_pT_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error'],
-                             'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
-                             })
+    pruned_model.compile(optimizer='adam', loss = {'prune_low_magnitude_pT_output': 'mape', 'prune_low_magnitude_mass_output': 'mape'})
 
     return pruned_model
 
@@ -140,8 +128,7 @@ def train(out_dir, percent, model_name, use_jets):
     history = pruned_model.fit(
         inputs,
         {'prune_low_magnitude_pT_output': pt_target_train, 'prune_low_magnitude_mass_output': mass_target_train },
-        # {'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
-        sample_weight = {"prune_low_magnitude_pT_output": flatten_weights(reco_pt_train, 76), "prune_low_magnitude_mass_output": flatten_weights(reco_mass_train, 61)},
+        sample_weight = {'prune_low_magnitude_pT_output': flatten_weights(reco_pt_train, 61), "prune_low_magnitude_mass_output": flatten_weights(reco_mass_train, 61)},
         epochs = EPOCHS,
         batch_size = BATCH_SIZE,
         verbose = 2,
