@@ -16,55 +16,23 @@ from qkeras import QConv1D
 
 from tensorflow.keras.layers import BatchNormalization, Input, Dense, Activation, GlobalAveragePooling1D, GlobalMaxPooling1D, Flatten, Concatenate, Conv1D
 from keras import activations
-# def baseline(constituents_shape, jets_shape):
-#     print('Using model: "baseline"')
-
-#     # #Initialize inputs
-#     constituent_input = Input(shape=constituents_shape, name='constituent_inputs')
-
-#     # #Main branch
-#     constituent_input_norm = BatchNormalization(name='norm_input')(constituent_input)
-    
-#     # #First Conv1D
-#     main = Conv1D(filters=32, kernel_size=1, name='Conv1D_1')(constituent_input_norm)
-#     main = Activation(activation=activations.relu, name='relu_1')(main)
-
-#     # #Second Conv1D
-#     main = Conv1D(filters=16, kernel_size=1, name='Conv1D_2')(main)
-#     main = Activation(activation=activations.relu, name='relu_2')(main)
-
-#     # # Linear activation to change HLS bitwidth to fix overflow in AveragePooling
-#     # main = Activation(activation=activations.relu, name = 'act_pool')(main)
-#     constituent_features = GlobalAveragePooling1D(name='avgpool')(main)
-    
-#     jet_input = Input(shape=jets_shape, name='jet_inputs') # Shape is (n_jet_features,)
-#     jet_input_norm = BatchNormalization(name='norm_jet_input')(jet_input)
-#     features = Concatenate(name='combine_features')([constituent_features, jet_input_norm]) # Shape: (batch_size, 10 + n_jet_features)
-
-#     # pt regression branch
-#     pt_regress = Dense(16, name='Dense_1_pT')(features)
-#     pt_regress = Activation(activation=activations.relu, name='relu_1_pt')(pt_regress)
-#     pt_regress = Dense(8, name='Dense_2_pT')(pt_regress)
-#     pt_regress = Activation(activation=activations.relu, name='relu_2_pt')(pt_regress)
-#     pt_regress = Dense(1, name='pT_output')(pt_regress)
-
-#     # model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[pt_regress], name="baseline")
-#     model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[pt_regress], name="baseline")
-#     print(model.summary())
-
-#     return model
 
 def baseline(constituents_shape, jets_shape=None):
     print('Using model: "baseline"')
+    if jets_shape is not None:
+        print("Using jet features in the model!")
+    else: 
+        print("No jet features used in the model!")
+
 
     # #Initialize inputs
     constituent_input = Input(shape=constituents_shape, name='constituent_inputs')
 
     # #Main branch
-    # constituent_input_norm = BatchNormalization(name='norm_input')(constituent_input)
+    constituent_input_norm = BatchNormalization(name='norm_input')(constituent_input)
     
     # #First Conv1D
-    main = Conv1D(filters=32, kernel_size=1, name='Conv1D_1')(constituent_input)
+    main = Conv1D(filters=32, kernel_size=1, name='Conv1D_1')(constituent_input_norm)
     main = Activation(activation=activations.relu, name='relu_1')(main)
 
     # #Second Conv1D
@@ -76,8 +44,8 @@ def baseline(constituents_shape, jets_shape=None):
     constituent_features = GlobalAveragePooling1D(name='avgpool')(main)
     
     jet_input = Input(shape=jets_shape, name='jet_inputs') # Shape is (n_jet_features,)
-    # jet_input_norm = BatchNormalization(name='norm_jet_input')(jet_input)
-    features = Concatenate(name='combine_features')([constituent_features, jet_input]) # Shape: (batch_size, 10 + n_jet_features)
+    jet_input_norm = BatchNormalization(name='norm_jet_input')(jet_input)
+    features = Concatenate(name='combine_features')([constituent_features, jet_input_norm]) # Shape: (batch_size, 10 + n_jet_features)
 
     # pt regression branch
     pt_regress = Dense(16, name='Dense_1_pt')(features)
@@ -93,7 +61,6 @@ def baseline(constituents_shape, jets_shape=None):
     mass_regress = Activation(activation=activations.relu, name='relu_2_mass')(mass_regress)
     mass_regress = Dense(1, name='mass_output')(mass_regress)
 
-    # model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[pt_regress], name="baseline")
     model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[pt_regress, mass_regress], name="baseline")
     print(model.summary())
 
@@ -101,8 +68,7 @@ def baseline(constituents_shape, jets_shape=None):
 
 
 def qbaseline(constituents_shape, jets_shape=None, bits=9, bits_int=2, alpha_val=1):
-    print('Using model: "baseline"')
-        # Define a dictionary for common arguments
+    print('Using model: "quantised baseline"')
     common_args = {
         'kernel_quantizer': quantized_bits(bits, bits_int, alpha=alpha_val),
         'bias_quantizer': quantized_bits(bits, bits_int, alpha=alpha_val),
@@ -116,11 +82,11 @@ def qbaseline(constituents_shape, jets_shape=None, bits=9, bits_int=2, alpha_val
     main = BatchNormalization(name='norm_input')(constituent_input)
     
     #First Conv1D
-    main = QConv1D(filters=32, kernel_size=1, name='Conv1D_1', **common_args)(main)
+    main = QConv1D(filters=10, kernel_size=1, name='Conv1D_1', **common_args)(main)
     main = QActivation(activation=quantized_relu(bits), name='relu_1')(main)
 
     #Second Conv1D
-    main = QConv1D(filters=16, kernel_size=1, name='Conv1D_2', **common_args)(main)
+    main = QConv1D(filters=10, kernel_size=1, name='Conv1D_2', **common_args)(main)
     main = QActivation(activation=quantized_relu(bits), name='relu_2')(main)
 
     # Linear activation to change HLS bitwidth to fix overflow in AveragePooling
@@ -136,111 +102,32 @@ def qbaseline(constituents_shape, jets_shape=None, bits=9, bits_int=2, alpha_val
         main = Concatenate(name='combine_features')([main, norm_jet_input]) # Shape: (batch_size, 10 + n_jet_features)
         inputs["jet_inputs"] = jet_input
 
-    # mass regression branch
-    pt_regress = QDense(16, name='Dense_1_pT', **common_args)(main)
+    # pt regression branch
+    pt_regress = QDense(10, name='Dense_1_pT', **common_args)(main)
     pt_regress = QActivation(activation=quantized_relu(bits), name='relu_1_pt')(pt_regress)
-    pt_regress = QDense(8, name='Dense_2_pT', **common_args)(pt_regress)
-    pt_regress = QActivation(activation=quantized_relu(bits), name='relu_2_pt')(pt_regress)
+    # pt_regress = QDense(8, name='Dense_2_pT', **common_args)(pt_regress)
+    # pt_regress = QActivation(activation=quantized_relu(bits), name='relu_2_pt')(pt_regress)
     pt_regress = QDense(1, name='pT_output',
                         kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
                         bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
                         kernel_initializer='lecun_uniform')(pt_regress)
 
-    # #pT regression branch
-    # pt_regress = QDense(10, name='Dense_1_pT', **common_args)(main)
-    # pt_regress = QActivation(activation=quantized_relu(bits), name='relu_1_pt')(pt_regress)
-    # pt_regress = QDense(1, name='pT_output',
-    #                     kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
-    #                     bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
-    #                     kernel_initializer='lecun_uniform')(pt_regress)
-    
     # mass regression branch
-    # mass_regress = QDense(16, name='Dense_1_mass', **common_args)(main)
-    # mass_regress = QActivation(activation=quantized_relu(bits), name='relu_1_mass')(mass_regress)
+    mass_regress = QDense(10, name='Dense_1_mass', **common_args)(main)
+    mass_regress = QActivation(activation=quantized_relu(bits), name='relu_1_mass')(mass_regress)
     # mass_regress = QDense(8, name='Dense_2_mass', **common_args)(mass_regress)
     # mass_regress = QActivation(activation=quantized_relu(bits), name='relu_2_mass')(mass_regress)
-    # mass_regress = QDense(1, name='mass_output',
-    #                     kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
-    #                     bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
-    #                     kernel_initializer='lecun_uniform')(mass_regress)
+    mass_regress = QDense(1, name='mass_output',
+                        kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
+                        bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
+                        kernel_initializer='lecun_uniform')(mass_regress)
 
     #Define the model using both branches
-    # model = tf.keras.Model(inputs=inputs, outputs=[pt_regress, mass_regress], name="baseline")
-    model = tf.keras.Model(inputs=inputs, outputs=[pt_regress], name="baseline")
+    model = tf.keras.Model(inputs=inputs, outputs=[pt_regress, mass_regress], name="baseline")
     print(model.summary())
 
     return model
 
-
-# def baseline(constituents_shape, jets_shape=None, bits=9, bits_int=2, alpha_val=1):
-#     print('Using model: "baseline"')
-#         # Define a dictionary for common arguments
-#     common_args = {
-#         'kernel_quantizer': quantized_bits(bits, bits_int, alpha=alpha_val),
-#         'bias_quantizer': quantized_bits(bits, bits_int, alpha=alpha_val),
-#         'kernel_initializer': 'lecun_uniform'
-#     }
-
-#     #Initialize inputs
-#     constituent_input = tf.keras.layers.Input(shape=constituents_shape, name='constituent_inputs')
-
-#     #Main branch
-#     main = BatchNormalization(name='norm_input')(constituent_input)
-    
-#     #First Conv1D
-#     main = QConv1D(filters=32, kernel_size=1, name='Conv1D_1', **common_args)(main)
-#     main = QActivation(activation=quantized_relu(bits), name='relu_1')(main)
-
-#     #Second Conv1D
-#     main = QConv1D(filters=16, kernel_size=1, name='Conv1D_2', **common_args)(main)
-#     main = QActivation(activation=quantized_relu(bits), name='relu_2')(main)
-
-#     # Linear activation to change HLS bitwidth to fix overflow in AveragePooling
-#     main = QActivation(activation='quantized_bits(18,8)', name = 'act_pool')(main)
-#     main = GlobalAveragePooling1D(name='avgpool')(main)
-
-#     inputs = {"constituent_inputs": constituent_input}
-#     if jets_shape is not None:
-#         # If jet features are provided, concatenate them
-#         jet_input = Input(shape=jets_shape, name='jet_inputs') # Shape is (n_jet_features,)
-#         norm_jet_input = BatchNormalization(name='norm_jet_input')(jet_input)
-#         main = Concatenate(name='combine_features')([main, norm_jet_input]) # Shape: (batch_size, 10 + n_jet_features)
-#         inputs["jet_inputs"] = jet_input
-
-#     # mass regression branch
-#     pt_regress = QDense(16, name='Dense_1_pT', **common_args)(main)
-#     pt_regress = QActivation(activation=quantized_relu(bits), name='relu_1_pt')(pt_regress)
-#     pt_regress = QDense(8, name='Dense_2_pT', **common_args)(pt_regress)
-#     pt_regress = QActivation(activation=quantized_relu(bits), name='relu_2_pt')(pt_regress)
-#     pt_regress = QDense(1, name='pT_output',
-#                         kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
-#                         bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
-#                         kernel_initializer='lecun_uniform')(pt_regress)
-
-#     # #pT regression branch
-#     # pt_regress = QDense(10, name='Dense_1_pT', **common_args)(main)
-#     # pt_regress = QActivation(activation=quantized_relu(bits), name='relu_1_pt')(pt_regress)
-#     # pt_regress = QDense(1, name='pT_output',
-#     #                     kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
-#     #                     bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
-#     #                     kernel_initializer='lecun_uniform')(pt_regress)
-    
-#     # mass regression branch
-#     # mass_regress = QDense(16, name='Dense_1_mass', **common_args)(main)
-#     # mass_regress = QActivation(activation=quantized_relu(bits), name='relu_1_mass')(mass_regress)
-#     # mass_regress = QDense(8, name='Dense_2_mass', **common_args)(mass_regress)
-#     # mass_regress = QActivation(activation=quantized_relu(bits), name='relu_2_mass')(mass_regress)
-#     # mass_regress = QDense(1, name='mass_output',
-#     #                     kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
-#     #                     bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
-#     #                     kernel_initializer='lecun_uniform')(mass_regress)
-
-#     #Define the model using both branches
-#     # model = tf.keras.Model(inputs=inputs, outputs=[pt_regress, mass_regress], name="baseline")
-#     model = tf.keras.Model(inputs=inputs, outputs=[pt_regress], name="baseline")
-#     print(model.summary())
-
-#     return model
 
 
 def choose_aggregator(choice: str):

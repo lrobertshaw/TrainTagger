@@ -29,7 +29,7 @@ tf.config.threading.set_intra_op_parallelism_threads(num_threads)
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
 tf.keras.utils.set_random_seed(420) #not a special number 
 BATCH_SIZE = 256 #1024
-EPOCHS = 20
+EPOCHS = 50
 VALIDATION_SPLIT = 0.2
 
 # Sparsity parameters
@@ -52,25 +52,7 @@ def prune_model(model, num_samples):
 
     mets = ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
     pruned_model.compile(optimizer='adam',
-                         loss = {'pT_output':'mape', 'mass_output': 'mape'}
-                        #  metrics = {'pT_output': mets},#, 'mass_output': mets},
-                        #  weighted_metrics = {'pT_output': mets}#, 'mass_output': mets}
-                         )
-    # pruned_model.compile(optimizer='adam',
-    #                      loss = {
-    #                         #  'prune_low_magnitude_pT_output': 'mean_absolute_percentage_error',
-    #                          'prune_low_magnitude_mass_output': 'mean_absolute_percentage_error'
-    #                          },
-    #                      metrics = {
-    #                         #  'prune_low_magnitude_pT_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error'],
-    #                          'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
-    #                          },
-    #                      weighted_metrics = {
-    #                         #  'prune_low_magnitude_pT_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error'],
-    #                          'prune_low_magnitude_mass_output': ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
-    #                          })
-
-    print(pruned_model.summary())
+                         loss = {'pT_output':'mape', 'mass_output': 'mape'})
 
     return pruned_model
 
@@ -145,14 +127,12 @@ def train(out_dir, percent, model_name, use_jets):
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
 
     from tagger.train.weights import flatten_weights
-    # weights = flatten_weights(mass_target_train, nBins=31)
-    # print(weights)
 
     history = pruned_model.fit(
         inputs,
-        {'pT_output': truth_pt_train, 'mass_output': truth_mass_train },
-        # {'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
-        sample_weight = {"pT_output": flatten_weights(reco_pt_train, 0, 1500, 76), "mass_output": flatten_weights(reco_mass_train, 0, 180, 61)},
+        # {'pT_output': reco_pt_train, 'mass_output': reco_mass_train },
+        {'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
+        sample_weight = {"pT_output": flatten_weights(reco_pt_train, 0, 2000, 61), "mass_output": flatten_weights(reco_mass_train, 0, 180, 61)},
         epochs = EPOCHS,
         batch_size = BATCH_SIZE,
         verbose = 2,
