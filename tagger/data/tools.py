@@ -279,7 +279,7 @@ def group_id_values(event_id, *arrays, num_elements = 2):
 
     return grouped_id[mask], filtered_grouped_arrays
 
-def to_ML(data, use_jets):
+def to_ML(data, class_labels, use_jets):
     """
     Take in the data from make_data (loaded by load_data) and make them ready for training.
     """
@@ -289,12 +289,12 @@ def to_ML(data, use_jets):
     if use_jets:
         try:
             features = ( np.asarray(data['nn_inputs']), np.asarray(data['nn_jet_inputs']) )
-            # features = data["nn_inputs"], data["nn_jet_inputs"]
         except KeyError: raise KeyError("Error: jet-level features not found in data. Please check your dataset or the tag used.")
     else:
         features = np.asarray(data['nn_inputs'])
-        # features = data["nn_inputs"]
     
+    y = tf.keras.utils.to_categorical(np.asarray(data['class_label']), num_classes=len(class_labels))
+
     pt_target = np.asarray(data['target_pt'])
     truth_pt = np.asarray(data['target_pt_phys'])
     reco_pt = np.asarray(data['jet_pt_phys'])
@@ -303,7 +303,7 @@ def to_ML(data, use_jets):
     truth_mass = np.asarray(data['target_mass_phys'])
     reco_mass = np.asarray(data['jet_mass'])
 
-    return features, pt_target, truth_pt, reco_pt, mass_target, truth_mass, reco_mass
+    return features, y, pt_target, truth_pt, reco_pt, mass_target, truth_mass, reco_mass
 
 def load_data(outdir, percentage, test_ratio=0.15, fields=None):
     """
@@ -356,11 +356,11 @@ def load_data(outdir, percentage, test_ratio=0.15, fields=None):
     data_metadata_file  = os.path.join(outdir, "variables.json")
     with open(data_metadata_file, "r") as f:
         variables = json.load(f)
-        targets = variables['outputs']
+        class_labels = variables['outputs']
         input_vars = variables['inputs']
         extra_vars = variables['extras']
     
-    return train_data, test_data, targets, input_vars, extra_vars
+    return train_data, test_data, class_labels, input_vars, extra_vars
 
 def make_data(infile='./sc8_signal.root', 
               outdir='training_data/',

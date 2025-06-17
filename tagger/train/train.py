@@ -50,13 +50,12 @@ def prune_model(model, num_samples):
     # pruning_params = {'pruning_schedule': tfmot.sparsity.keras.PolynomialDecay(initial_sparsity=I_SPARSITY, final_sparsity=F_SPARSITY, begin_step=0, end_step=end_step)}
     pruned_model = model#tfmot.sparsity.keras.prune_low_magnitude(model, **pruning_params)
 
-    mets = ['mae', 'mean_absolute_percentage_error', 'mean_squared_logarithmic_error']
     pruned_model.compile(optimizer='adam',
-                         loss = {'pT_output':'mape', 'mass_output': 'mape'})
+                         loss = {'jet_id_output': 'categorical_crossentropy', 'pT_output':'mape', 'mass_output': 'mape'})
 
     return pruned_model
 
-def save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, use_jets):
+def save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, class_labels, use_jets):
 
     os.makedirs(os.path.join(out_dir,'testing_data'), exist_ok=True)
 
@@ -66,11 +65,15 @@ def save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test
     else:
         np.save(os.path.join(out_dir, "testing_data/X_test_constits.npy"), X_test)
 
+    np.save(os.path.join(out_dir, "testing_data/y_test.npy"), y_test)
+
     np.save(os.path.join(out_dir, "testing_data/truth_pt_test.npy"), truth_pt_test)
     np.save(os.path.join(out_dir, "testing_data/reco_pt_test.npy"), reco_pt_test)
 
     np.save(os.path.join(out_dir, "testing_data/truth_mass_test.npy"), truth_mass_test)
     np.save(os.path.join(out_dir, "testing_data/reco_mass_test.npy"), reco_mass_test)
+
+    with open(os.path.join(out_dir, "class_label.json"), "w") as f: json.dump(class_labels, f, indent=4) #Dump output variables
 
     print(f"Test data saved to {out_dir}")
 
@@ -86,19 +89,21 @@ def train(out_dir, percent, model_name, use_jets):
     os.makedirs(out_dir)
 
     #Load the data, class_labels and input variables name, not really using input variable names to be honest
-    data_train, data_test, _, input_vars, extra_vars = load_data("training_data/", percentage=percent)
+    data_train, data_test, class_labels, input_vars, extra_vars = load_data("training_data/", percentage=percent)
     print(f"Loaded {len(data_train)} training jets and {len(data_test)} testing jets")
+    
     #Save input variables and extra variables metadata
     with open(os.path.join(out_dir, "input_vars.json"), "w") as f: json.dump(input_vars, f, indent=4) #Dump output variables
     with open(os.path.join(out_dir, "extra_vars.json"), "w") as f: json.dump(extra_vars, f, indent=4) #Dump output variables
 
     #Make into ML-like data for training
-    X_train, pt_target_train, truth_pt_train, reco_pt_train, mass_target_train, truth_mass_train, reco_mass_train = to_ML(data_train, use_jets)
+    X_train, y_train, pt_target_train, truth_pt_train, reco_pt_train, mass_target_train, truth_mass_train, reco_mass_train = to_ML(data_train, class_labels, use_jets)
     
     #Save X_test, y_test, and truth_pt_test for plotting later
-    X_test, _, truth_pt_test, reco_pt_test, _, truth_mass_test, reco_mass_test = to_ML(data_test, use_jets)
-    save_test_data(out_dir, X_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, use_jets)
+    X_test, y_test, _, truth_pt_test, reco_pt_test, _, truth_mass_test, reco_mass_test = to_ML(data_test, use_jets)
+    save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, class_labels, use_jets)
 
+    output_shape = y_train.shape[1:]
     if use_jets:
         X_train_constits, X_train_jets = X_train
         inputs =  {'constituent_inputs': X_train_constits, 'jet_inputs': X_train_jets}
@@ -112,7 +117,7 @@ def train(out_dir, percent, model_name, use_jets):
     #Dynamically get the model
     try:
         model_func = getattr(models, model_name)
-        model = model_func(constituents_shape, jets_shape)  # Assuming the model function doesn't require additional arguments
+        model = model_func(constituents_shape, jets_shape, output_shape)  # Assuming the model function doesn't require additional arguments
         plot_model(model, to_file=f"{out_dir}/model.png", show_shapes=True, show_layer_names=True, show_layer_activations=True)
     except:
         raise ValueError(f"Model '{model_name}' is not defined in the 'models' module.")
@@ -130,9 +135,8 @@ def train(out_dir, percent, model_name, use_jets):
 
     history = pruned_model.fit(
         inputs,
-        # {'pT_output': reco_pt_train, 'mass_output': reco_mass_train },
-        {'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
-        sample_weight = {"pT_output": flatten_weights(reco_pt_train, 0, 2000, 61), "mass_output": flatten_weights(reco_mass_train, 0, 180, 61)},
+        {'jet_id_output': y_train, 'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
+        # sample_weight = {"pT_output": flatten_weights(reco_pt_train, 0, 2000, 61), "mass_output": flatten_weights(reco_mass_train, 0, 180, 61)},
         epochs = EPOCHS,
         batch_size = BATCH_SIZE,
         verbose = 2,
