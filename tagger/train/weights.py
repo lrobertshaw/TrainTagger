@@ -42,3 +42,34 @@ def flatten_weights(var, mi, mx, b):
     print(f"Number of NaNs: {np.sum(np.isnan(sample_weights))}")
     print(f"Number of Infs: {np.sum(np.isinf(sample_weights))}")
     return sample_weights
+
+
+def flatten_class_weights(y_train):
+    """
+    Calculates weights to balance the contribution of each class.
+    
+    Args:
+        y_train (np.array): One-hot encoded class labels (shape: [n_samples, n_classes]).
+
+    Returns:
+        np.array: An array of sample weights for class balancing.
+    """
+    
+    num_samples = y_train.shape[0]
+    num_classes = y_train.shape[1]
+    
+    # Calculate the number of samples in each class
+    class_counts = np.sum(y_train, axis=0)
+    
+    # Calculate weight for each class: total_samples / (n_classes * n_samples_in_class)
+    # This formula is standard for balancing class contributions.
+    class_weights = num_samples / (num_classes * class_counts)
+    
+    # Assign the appropriate weight to each sample based on its class
+    # The dot product efficiently applies the class weight to each sample
+    sample_weights = y_train.dot(class_weights)
+    
+    # Normalize weights to have a mean of 1
+    sample_weights /= np.mean(sample_weights)
+    
+    return sample_weights

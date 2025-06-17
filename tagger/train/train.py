@@ -100,7 +100,7 @@ def train(out_dir, percent, model_name, use_jets):
     X_train, y_train, pt_target_train, truth_pt_train, reco_pt_train, mass_target_train, truth_mass_train, reco_mass_train = to_ML(data_train, class_labels, use_jets)
     
     #Save X_test, y_test, and truth_pt_test for plotting later
-    X_test, y_test, _, truth_pt_test, reco_pt_test, _, truth_mass_test, reco_mass_test = to_ML(data_test, use_jets)
+    X_test, y_test, _, truth_pt_test, reco_pt_test, _, truth_mass_test, reco_mass_test = to_ML(data_test, class_labels, use_jets)
     save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, truth_mass_test, reco_mass_test, class_labels, use_jets)
 
     output_shape = y_train.shape[1:]
@@ -131,12 +131,18 @@ def train(out_dir, percent, model_name, use_jets):
                  EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, start_from_epoch=1),
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
 
-    from tagger.train.weights import flatten_weights
+    from tagger.train.weights import flatten_weights, flatten_class_weights
 
+    print("X_train:", type(X_train), X_train.shape, X_train.dtype)
+    print("y_train:", type(y_train), y_train.shape, y_train.dtype)
+    X_train = X_train.astype('float32')
+
+    # import mlflow
+    mlflow.autolog(disable=True)
     history = pruned_model.fit(
         inputs,
         {'jet_id_output': y_train, 'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
-        # sample_weight = {"pT_output": flatten_weights(reco_pt_train, 0, 2000, 61), "mass_output": flatten_weights(reco_mass_train, 0, 180, 61)},
+        sample_weight = {"jet_id_output": flatten_class_weights(y_train), "pT_output": flatten_weights(reco_pt_train, 0, 2000, 61), "mass_output": flatten_weights(reco_mass_train, 0, 180, 61)},
         epochs = EPOCHS,
         batch_size = BATCH_SIZE,
         verbose = 2,
