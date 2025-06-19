@@ -32,7 +32,7 @@ def _define_target(data):
     genmatch_base = (data['jet_genmatch_pt'] >= 0) | (data['jet_genmatch_mass'] >= 0)    # Only jets matched to a gen jet
     data = data[genmatch_base]
 
-        # Define conditions for each label
+    # Define conditions for each label
     conditions = {
         "H": (
             (abs(data['jet_genmatch_pdg']) == 25) & (data["jet_genmatch_Nprongs"] >= 2)
@@ -40,19 +40,20 @@ def _define_target(data):
         "W": (
             (abs(data['jet_genmatch_pdg']) == 24) & (data["jet_genmatch_Nprongs"] >= 2)
         ),
-        "Z": (
-            (abs(data['jet_genmatch_pdg']) == 23) & (data["jet_genmatch_Nprongs"] >= 2)
+        # "Z": (
+        #     (abs(data['jet_genmatch_pdg']) == 23) & (data["jet_genmatch_Nprongs"] >= 2)
+        # ),    sample currently doesnt have any Zs
+        # "Two-prong": (
+        #     ( ~( (abs(data["jet_genmatch_pdg"]) == 25) | (abs(data["jet_genmatch_pdg"]) == 24) | (abs(data["jet_genmatch_pdg"]) == 23) ) )
+        #     & ( data["jet_genmatch_Nprongs"] >= 2 )
+        # ),    sample currently doesnt have any two-prong jets that are not H, W or Z
+        "Background": (
+            data["jet_genmatch_Nprongs"] <= 1
         )
-        # "two_prong": (
-        #     data["jet_genmatch_Nprongs"] >= 2
-        # ),
-        # "one_prong": (
-        #     data["jet_genmatch_Nprongs"] <= 1
-        # ),
     }
 
     # Automatically generate class labels based on the order of keys in conditions
-    class_labels = {label: idx for idx, label in enumerate(conditions)}
+    class_labels = {label: idx for idx, label in enumerate(conditions)}    # {"H": 0, "W": 1, "Z": 2, "Two-prong": 3, "Background": 4}
 
     # Initialize the new array in data for numeric labels with default -1 for unmatched entries
     data['class_label'] = ak.full_like(data['jet_genmatch_pt'], -1)

@@ -29,7 +29,7 @@ tf.config.threading.set_intra_op_parallelism_threads(num_threads)
 # GLOBAL PARAMETERS TO BE DEFINED WHEN TRAINING
 tf.keras.utils.set_random_seed(420) #not a special number 
 BATCH_SIZE = 256 #1024
-EPOCHS = 50
+EPOCHS = 200
 VALIDATION_SPLIT = 0.2
 
 # Sparsity parameters
@@ -50,8 +50,12 @@ def prune_model(model, num_samples):
     # pruning_params = {'pruning_schedule': tfmot.sparsity.keras.PolynomialDecay(initial_sparsity=I_SPARSITY, final_sparsity=F_SPARSITY, begin_step=0, end_step=end_step)}
     pruned_model = model#tfmot.sparsity.keras.prune_low_magnitude(model, **pruning_params)
 
+    mets = ['categorical_crossentropy', 'accuracy']
     pruned_model.compile(optimizer='adam',
-                         loss = {'jet_id_output': 'categorical_crossentropy', 'pT_output':'mape', 'mass_output': 'mape'})
+                         loss = {'jet_id_output': 'categorical_crossentropy'},
+                         metrics = {'jet_id_output': mets},
+                         weighted_metrics = {'jet_id_output': mets}
+                         )
 
     return pruned_model
 
@@ -129,20 +133,15 @@ def train(out_dir, percent, model_name, use_jets):
     #Now fit to the data
     callbacks = [tfmot.sparsity.keras.UpdatePruningStep(),
                  EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, start_from_epoch=1),
-                 ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
+                 ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=3.125e-5)]
 
     from tagger.train.weights import flatten_weights, flatten_class_weights
-
-    print("X_train:", type(X_train), X_train.shape, X_train.dtype)
-    print("y_train:", type(y_train), y_train.shape, y_train.dtype)
-    X_train = X_train.astype('float32')
-
-    # import mlflow
     mlflow.autolog(disable=True)
+
     history = pruned_model.fit(
         inputs,
-        {'jet_id_output': y_train, 'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
-        sample_weight = {"jet_id_output": flatten_class_weights(y_train), "pT_output": flatten_weights(reco_pt_train, 0, 2000, 61), "mass_output": flatten_weights(reco_mass_train, 0, 180, 61)},
+        {'jet_id_output': y_train}, #, 'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
+        sample_weight = {"jet_id_output": flatten_class_weights(y_train)},#, "pT_output": flatten_weights(reco_pt_train, 0, 2000, 61), "mass_output": flatten_weights(reco_mass_train, 0, 180, 61)},
         epochs = EPOCHS,
         batch_size = BATCH_SIZE,
         verbose = 2,
@@ -161,7 +160,7 @@ def train(out_dir, percent, model_name, use_jets):
     #Produce some basic plots with the training for diagnostics
     plot_path = os.path.join(out_dir, "plots/training")
     os.makedirs(plot_path, exist_ok=True)
-
+    
     #Plot history
     loss_history(plot_path, history)
 
@@ -177,7 +176,7 @@ if __name__ == "__main__":
     parser.add_argument('-r','--ratio', default=1, type=float, help = 'Ratio (0-1) of the input data root file to process')
     parser.add_argument('-s','--step', default='10MB' , help = 'The maximum memory size to process input root file')
     parser.add_argument('-e','--extras', default='extra_fields', help= 'Which extra fields to add to output tuples, in pfcand_fields.yml')
-
+    
     #Training argument
     parser.add_argument('-o','--output', default='output/baseline', help = 'Output model directory path, also save evaluation plots')
     parser.add_argument('-p','--percent', default=100, type=int, help = 'Percentage of how much processed data to train on')

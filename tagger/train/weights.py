@@ -72,4 +72,13 @@ def flatten_class_weights(y_train):
     # Normalize weights to have a mean of 1
     sample_weights /= np.mean(sample_weights)
     
+    print(f"Mean weight: {np.mean(sample_weights)}")
+    print(f"Max weight: {np.max(sample_weights)}")
+    print(f"Min weight: {np.min(sample_weights)}")
+    print(f"Median weight: {np.median(sample_weights)}")
+    print(f"Std weight: {np.std(sample_weights)}")
+    print(f"Number of 0s: {np.sum(sample_weights == 0)}")
+    print(f"Number of NaNs: {np.sum(np.isnan(sample_weights))}")
+    print(f"Number of Infs: {np.sum(np.isinf(sample_weights))}")
+
     return sample_weights

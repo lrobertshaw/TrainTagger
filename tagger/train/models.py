@@ -53,22 +53,22 @@ def baseline(constituents_shape, jets_shape, output_shape):
     jet_id = Dense(output_shape[0], name='Dense_3_jetID')(jet_id)
     jet_id = Activation('softmax', name='jet_id_output')(jet_id)
 
-    #pT regression branch
-    pt_regress = Dense(16, name='Dense_1_pT')(main)
-    pt_regress = Activation(activation=activations.relu, name='relu_1_pt')(pt_regress)
-    pt_regress = Dense(8, name='Dense_2_pT')(pt_regress)
-    pt_regress = Activation(activation=activations.relu, name='relu_2_pt')(pt_regress)
-    pt_regress = Dense(1, name='pT_output')(pt_regress)
+    # #pT regression branch
+    # pt_regress = Dense(16, name='Dense_1_pT')(main)
+    # pt_regress = Activation(activation=activations.relu, name='relu_1_pt')(pt_regress)
+    # pt_regress = Dense(8, name='Dense_2_pT')(pt_regress)
+    # pt_regress = Activation(activation=activations.relu, name='relu_2_pt')(pt_regress)
+    # pt_regress = Dense(1, name='pT_output')(pt_regress)
     
-    # mass regression branch
-    mass_regress = Dense(16, name='Dense_1_mass')(main)
-    mass_regress = Activation(activation=activations.relu, name='relu_1_mass')(mass_regress)
-    mass_regress = Dense(8, name='Dense_2_mass')(mass_regress)
-    mass_regress = Activation(activation=activations.relu, name='relu_2_mass')(mass_regress)
-    mass_regress = Dense(1, name='mass_output')(mass_regress)
+    # # mass regression branch
+    # mass_regress = Dense(16, name='Dense_1_mass')(main)
+    # mass_regress = Activation(activation=activations.relu, name='relu_1_mass')(mass_regress)
+    # mass_regress = Dense(8, name='Dense_2_mass')(mass_regress)
+    # mass_regress = Activation(activation=activations.relu, name='relu_2_mass')(mass_regress)
+    # mass_regress = Dense(1, name='mass_output')(mass_regress)
 
     #Define the model using both branches
-    model = tf.keras.Model(inputs=inputs, outputs = [jet_id, pt_regress, mass_regress])
+    model = tf.keras.Model(inputs=inputs, outputs = [jet_id])#, pt_regress, mass_regress])
 
     print(model.summary())
 
