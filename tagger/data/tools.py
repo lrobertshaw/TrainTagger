@@ -257,11 +257,11 @@ def to_ML(data, use_jets):
     
     if use_jets:
         try:
-            features = ( np.asarray(data['nn_inputs']), np.asarray(data['nn_jet_inputs']) )
+            features = ( constit_feats, np.asarray(data['nn_jet_inputs']) )
             # features = data["nn_inputs"], data["nn_jet_inputs"]
         except KeyError: raise KeyError("Error: jet-level features not found in data. Please check your dataset or the tag used.")
     else:
-        features = np.asarray(data['nn_inputs'])
+        features = constit_feats
         # features = data["nn_inputs"]
     
     pt_target = np.asarray(data['target_pt'])

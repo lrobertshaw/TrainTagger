@@ -32,36 +32,41 @@ def baseline(constituents_shape, jets_shape=None):
     constituent_input_norm = BatchNormalization(name='norm_input')(constituent_input)
     
     # #First Conv1D
-    main = Conv1D(filters=32, kernel_size=1, name='Conv1D_1')(constituent_input_norm)
+    main = Conv1D(filters=10, kernel_size=1, name='Conv1D_1')(constituent_input_norm)
     main = Activation(activation=activations.relu, name='relu_1')(main)
 
     # #Second Conv1D
-    main = Conv1D(filters=16, kernel_size=1, name='Conv1D_2')(main)
+    main = Conv1D(filters=10, kernel_size=1, name='Conv1D_2')(main)
     main = Activation(activation=activations.relu, name='relu_2')(main)
 
     # # Linear activation to change HLS bitwidth to fix overflow in AveragePooling
     # main = Activation(activation=activations.relu, name = 'act_pool')(main)
-    constituent_features = GlobalAveragePooling1D(name='avgpool')(main)
+    main = GlobalAveragePooling1D(name='avgpool')(main)
     
-    jet_input = Input(shape=jets_shape, name='jet_inputs') # Shape is (n_jet_features,)
-    jet_input_norm = BatchNormalization(name='norm_jet_input')(jet_input)
-    features = Concatenate(name='combine_features')([constituent_features, jet_input_norm]) # Shape: (batch_size, 10 + n_jet_features)
+    inputs = {"constituent_inputs": constituent_input}
+    if jets_shape is not None:
+        print("Using jet features in the model!")
+        # If jet features are provided, concatenate them
+        jet_input = Input(shape=jets_shape, name='jet_inputs') # Shape is (n_jet_features,)
+        jet_input_norm = BatchNormalization(name='norm_jet_input')(jet_input)
+        main = Concatenate(name='combine_features')([main, jet_input_norm]) # Shape: (batch_size, 10 + n_jet_features)
+        inputs["jet_inputs"] = jet_input
 
     # pt regression branch
-    pt_regress = Dense(16, name='Dense_1_pt')(features)
+    pt_regress = Dense(10, name='Dense_1_pt')(main)
     pt_regress = Activation(activation=activations.relu, name='relu_1_pt')(pt_regress)
-    pt_regress = Dense(8, name='Dense_2_pt')(pt_regress)
-    pt_regress = Activation(activation=activations.relu, name='relu_2_pt')(pt_regress)
+    # pt_regress = Dense(8, name='Dense_2_pt')(pt_regress)
+    # pt_regress = Activation(activation=activations.relu, name='relu_2_pt')(pt_regress)
     pt_regress = Dense(1, name='pT_output')(pt_regress)
     
     # mass regression branch
-    mass_regress = Dense(16, name='Dense_1_mass')(features)
+    mass_regress = Dense(10, name='Dense_1_mass')(main)
     mass_regress = Activation(activation=activations.relu, name='relu_1_mass')(mass_regress)
-    mass_regress = Dense(8, name='Dense_2_mass')(mass_regress)
-    mass_regress = Activation(activation=activations.relu, name='relu_2_mass')(mass_regress)
+    # mass_regress = Dense(8, name='Dense_2_mass')(mass_regress)
+    # mass_regress = Activation(activation=activations.relu, name='relu_2_mass')(mass_regress)
     mass_regress = Dense(1, name='mass_output')(mass_regress)
 
-    model = tf.keras.Model(inputs={"constituent_inputs": constituent_input, "jet_inputs": jet_input}, outputs=[pt_regress, mass_regress], name="baseline")
+    model = tf.keras.Model(inputs=inputs, outputs=[pt_regress, mass_regress], name="baseline")
     print(model.summary())
 
     return model
