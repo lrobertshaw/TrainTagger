@@ -253,7 +253,7 @@ def to_ML(data, use_jets):
     Take in the data from make_data (loaded by load_data) and make them ready for training.
     """
     keepExtras = False
-    constit_feats = np.asarray(data["nn_inputs"]) if keepExtras else np.asarray(data["nn_inputs"])[:,:-4]    # exclude E, px, py and pz
+    constit_feats = np.asarray(data["nn_inputs"]) if keepExtras else np.asarray(data["nn_inputs"])[:, :, :-4]    # exclude E, px, py and pz
     
     if use_jets:
         try:
