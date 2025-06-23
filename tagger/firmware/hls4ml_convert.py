@@ -8,9 +8,10 @@ from qkeras.utils import load_qmodel
 import mlflow
 from pathlib import Path
 import numpy as np
+from tagger.train.losses import custom_loss
 #----------------------------------------------
 
-def convert(model, outpath,build=True):
+def convert(model, outpath, build=True):
 
     #Remove the old directory if they exist
     os.system(f'rm -rf {outpath}')
@@ -23,8 +24,9 @@ def convert(model, outpath,build=True):
 
     #Create default config
     config = hls4ml.utils.config_from_keras_model(model, granularity='name')
+    print(config)
     config['IOType'] = 'io_parallel'
-    config['LayerName']['model_input']['Precision']['result'] = input_precision
+    config['LayerName']['constituent_inputs']['Precision']['result'] = input_precision
 
     #Configuration for conv1d layers
     #hls4ml automatically figures out the paralellization factor
@@ -40,16 +42,15 @@ def convert(model, outpath,build=True):
             config["LayerName"][layer.name]["result"] = input_precision
             config["LayerName"][layer.name]["Trace"] = trace
 
-        elif layer_name in ["Permute","Concatenate","Flatten","Reshape","UpSampling1D","Add"]:
+        elif layer_name in ["Permute", "Concatenate", "Flatten", "Reshape", "UpSampling1D", "Add"]:
             print("Skipping trace for:", layer.name)
         else:
             config["LayerName"][layer.name]["Trace"] = trace
 
-    
-    config["LayerName"]["jet_id_output"]["Precision"]["result"] = class_precision
-    config["LayerName"]["jet_id_output"]["Implementation"] = "latency"
     config["LayerName"]["pT_output"]["Precision"]["result"] = reg_precision
     config["LayerName"]["pT_output"]["Implementation"] = "latency"
+    config["LayerName"]["mass_output"]["Precision"]["result"] = reg_precision
+    config["LayerName"]["mass_output"]["Implementation"] = "latency"
 
     #Save config  as json file
     print("Saving default config as config.json ...")
@@ -58,7 +59,7 @@ def convert(model, outpath,build=True):
     #Write HLS
     hls_model = hls4ml.converters.convert_from_keras_model(model,
                                                        backend='Vitis',
-                                                       project_name='L1TSC4NGJetModel',
+                                                       project_name='L1TSC8NGJetModel',
                                                        clock_period=2.8, #1/360MHz = 2.8ns
                                                        hls_config=config,
                                                        output_dir=f'{outpath}',
@@ -77,11 +78,11 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
     parser.add_argument('-m','--model', default='output/baseline/model/saved_model.h5' , help = 'Input model path for conversion')    
-    parser.add_argument('-o','--outpath', default='tagger/firmware/L1TSC4NGJetModel' , help = 'Jet tagger synthesized output directory')    
+    parser.add_argument('-o','--outpath', default='tagger/firmware/L1TSC8NGJetModel' , help = 'Jet tagger synthesized output directory')    
     args = parser.parse_args()
 
     #Load the model
-    model = load_qmodel(args.model)
+    model = load_qmodel(args.model, custom_objects={"custom_loss": custom_loss})
     precisions = convert(model,args.outpath)
 
 
