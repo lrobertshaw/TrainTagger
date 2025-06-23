@@ -29,16 +29,17 @@ def _define_target(data):
         dict: A dictionary containing the split data by label.
     """
 
+    data["jet_genmatch_pt"] = ak.nan_to_num( data["jet_genmatch_pt"], nan=0, posinf=0, neginf=0)
+    data["jet_genmatch_mass"] = ak.nan_to_num( data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0)
+
     genmatch_base = (data['jet_genmatch_pt'] > 0) | (data['jet_genmatch_mass'] > 0)    # Only jets matched to a gen jet
     data = data[genmatch_base]
 
-    pt_ratio = ak.nan_to_num( data["jet_genmatch_pt"] / data["jet_pt_phys"], nan=0, posinf=0, neginf=0)
-    data['target_pt'] = np.clip(pt_ratio, 0.3, 3)
-    data['target_pt_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_pt"], nan=0, posinf=0, neginf=0 ), 0, 1500)
+    data['target_pt'] = np.log2( np.clip( data["jet_genmatch_pt"], 1, 2048 ) )    #np.clip(pt_ratio, 0.3, 3)
+    data['target_pt_phys'] = np.clip( data["jet_genmatch_pt"], 1, 2048 )
 
-    mass_ratio = ak.nan_to_num( data["jet_genmatch_mass"] / data["jet_mass"], nan=0, posinf=0, neginf=0)
-    data["target_mass"] = np.clip(mass_ratio, 0.3, 3)
-    data['target_mass_phys'] = np.clip( ak.nan_to_num( data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0 ), 0, 182)
+    data["target_mass"] = np.log2( np.clip( data["jet_genmatch_mass"], 1, 256 ) )    #np.clip(mass_ratio, 0.3, 3)
+    data['target_mass_phys'] = np.clip( data["jet_genmatch_mass"], 1, 256)
 
     # Apply pt_cut and mass_cut
     jet_ptmin_gen, jet_massmin_gen = (data['target_pt_phys'] > 15.0), (data['target_mass_phys'] > 5.0)
