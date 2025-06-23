@@ -34,21 +34,11 @@ def _define_target(data):
 
     # Define conditions for each label
     conditions = {
-        "H": (
-            (abs(data['jet_genmatch_pdg']) == 25) & (data["jet_genmatch_Nprongs"] >= 2)
+        "TP": (
+            data["jet_genmatch_Nprongs"] >= 2
         ),
-        "W": (
-            (abs(data['jet_genmatch_pdg']) == 24) & (data["jet_genmatch_Nprongs"] >= 2)
-        ),
-        # "Z": (
-        #     (abs(data['jet_genmatch_pdg']) == 23) & (data["jet_genmatch_Nprongs"] >= 2)
-        # ),    sample currently doesnt have any Zs
-        # "Two-prong": (
-        #     ( ~( (abs(data["jet_genmatch_pdg"]) == 25) | (abs(data["jet_genmatch_pdg"]) == 24) | (abs(data["jet_genmatch_pdg"]) == 23) ) )
-        #     & ( data["jet_genmatch_Nprongs"] >= 2 )
-        # ),    sample currently doesnt have any two-prong jets that are not H, W or Z
-        "Background": (
-            data["jet_genmatch_Nprongs"] <= 1
+        "BKG": (
+            data["jet_genmatch_Nprongs"] < 2
         )
     }
 
@@ -285,14 +275,15 @@ def to_ML(data, class_labels, use_jets):
     Take in the data from make_data (loaded by load_data) and make them ready for training.
     """
     keepExtras = False
-    constit_feats = np.asarray(data["nn_inputs"]) if keepExtras else np.asarray(data["nn_inputs"])[:,:-4]    # exclude E, px, py and pz
-    
+    constit_data = np.asarray(data["nn_inputs"]) if keepExtras else np.asarray(data["nn_inputs"])[:, : , :-4]    # exclude E, px, py and pz
+    constit_feats = constit_data[:, :-16]
+
     if use_jets:
         try:
-            features = ( np.asarray(data['nn_inputs']), np.asarray(data['nn_jet_inputs']) )
+            features = ( constit_feats, np.asarray(data['nn_jet_inputs']) )
         except KeyError: raise KeyError("Error: jet-level features not found in data. Please check your dataset or the tag used.")
     else:
-        features = np.asarray(data['nn_inputs'])
+        features = constit_feats
     
     y = tf.keras.utils.to_categorical(np.asarray(data['class_label']), num_classes=len(class_labels))
 
@@ -306,7 +297,7 @@ def to_ML(data, class_labels, use_jets):
 
     return features, y, pt_target, truth_pt, reco_pt, mass_target, truth_mass, reco_mass
 
-def load_data(outdir, percentage, test_ratio=0.15, fields=None):
+def load_data(outdir, percentage, test_ratio=0.20, fields=None):
     """
     Load a specified percentage of the dataset using uproot.concatenate.
 

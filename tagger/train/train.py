@@ -50,9 +50,9 @@ def prune_model(model, num_samples):
     # pruning_params = {'pruning_schedule': tfmot.sparsity.keras.PolynomialDecay(initial_sparsity=I_SPARSITY, final_sparsity=F_SPARSITY, begin_step=0, end_step=end_step)}
     pruned_model = model#tfmot.sparsity.keras.prune_low_magnitude(model, **pruning_params)
 
-    mets = ['categorical_crossentropy', 'accuracy']
+    mets = ['binary_crossentropy', 'accuracy']
     pruned_model.compile(optimizer='adam',
-                         loss = {'jet_id_output': 'categorical_crossentropy'},
+                         loss = {'jet_id_output': 'binary_crossentropy'},
                          metrics = {'jet_id_output': mets},
                          weighted_metrics = {'jet_id_output': mets}
                          )
