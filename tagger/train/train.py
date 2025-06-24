@@ -132,8 +132,8 @@ def train(out_dir, percent, model_name, use_jets):
     from tagger.train.weights import flatten_weights
     history = pruned_model.fit(
         inputs,
-        {'pT_output': truth_pt_train, 'mass_output': truth_mass_train},
-        sample_weight = {"pT_output": flatten_weights(reco_pt_train, 0, 2000, 61), "mass_output": flatten_weights(reco_mass_train, 0, 180, 61)},
+        {'pT_output': pt_target_train, 'mass_output': mass_target_train},
+        sample_weight = {"pT_output": flatten_weights(reco_pt_train, 0, 2048, 65), "mass_output": flatten_weights(reco_mass_train, 0, 256, 65)},
         epochs = EPOCHS,
         batch_size = BATCH_SIZE,
         verbose = 2,

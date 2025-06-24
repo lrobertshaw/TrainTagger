@@ -28,7 +28,7 @@ def _define_target(data):
     Returns:
         dict: A dictionary containing the split data by label.
     """
-    
+
     data["jet_genmatch_pt"] = ak.nan_to_num( data["jet_genmatch_pt"], nan=0, posinf=0, neginf=0 )
     data["jet_genmatch_mass"] = ak.nan_to_num( data["jet_genmatch_mass"], nan=0, posinf=0, neginf=0 )
 
@@ -82,20 +82,20 @@ def _make_nn_inputs(data_split, tag, n_parts):
         padded_filled_array = _pad_fill(field_array, n_parts)
         inputs_list.append(padded_filled_array[:, :, np.newaxis])
 
-    from math import pi
-    pt = data_split["jet_pfcand"]["pt"]
-    deta = data_split["jet_pfcand"]["deta"]
-    dphi = data_split["jet_pfcand"]["dphi"]
+    # from math import pi
+    # pt = data_split["jet_pfcand"]["pt"]
+    # deta = data_split["jet_pfcand"]["deta"]
+    # dphi = data_split["jet_pfcand"]["dphi"]
     
-    energy = pt * np.cosh(deta*pi/720)
-    px = pt * np.cos(dphi*pi/720)
-    py = pt * np.sin(dphi*pi/720)
-    pz = pt * np.sinh(deta*pi/720)
+    # energy = pt * np.cosh(deta*pi/720)
+    # px = pt * np.cos(dphi*pi/720)
+    # py = pt * np.sin(dphi*pi/720)
+    # pz = pt * np.sinh(deta*pi/720)
 
-    inputs_list.append(_pad_fill(energy, n_parts)[:, :, np.newaxis])
-    inputs_list.append(_pad_fill(px, n_parts)[:, :, np.newaxis])
-    inputs_list.append(_pad_fill(py, n_parts)[:, :, np.newaxis])
-    inputs_list.append(_pad_fill(pz, n_parts)[:, :, np.newaxis])
+    # inputs_list.append(_pad_fill(energy, n_parts)[:, :, np.newaxis])
+    # inputs_list.append(_pad_fill(px, n_parts)[:, :, np.newaxis])
+    # inputs_list.append(_pad_fill(py, n_parts)[:, :, np.newaxis])
+    # inputs_list.append(_pad_fill(pz, n_parts)[:, :, np.newaxis])
 
     #batch_size, n_particles, n_features
     inputs = ak.concatenate(inputs_list, axis=2)
@@ -253,9 +253,11 @@ def to_ML(data, use_jets):
     """
     Take in the data from make_data (loaded by load_data) and make them ready for training.
     """
-    keepExtras = False
-    constit_feats = np.asarray(data["nn_inputs"]) if keepExtras else np.asarray(data["nn_inputs"])[:, :, :-4]    # exclude E, px, py and pz
-    
+    # keepExtras = False
+    # constit_feats = np.asarray(data["nn_inputs"]) if keepExtras else np.asarray(data["nn_inputs"])[:, :, :-4]    # exclude E, px, py and pz
+    constit_feats = np.asarray(data["nn_inputs"])
+
+
     if use_jets:
         try:
             features = ( constit_feats, np.asarray(data['nn_jet_inputs']) )
@@ -275,7 +277,7 @@ def to_ML(data, use_jets):
 
     return features, pt_target, truth_pt, reco_pt, mass_target, truth_mass, reco_mass
 
-def load_data(outdir, percentage, test_ratio=0.15, fields=None):
+def load_data(outdir, percentage, test_ratio=0.20, fields=None):
     """
     Load a specified percentage of the dataset using uproot.concatenate.
 
