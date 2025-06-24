@@ -126,8 +126,8 @@ def train(out_dir, percent, model_name, use_jets):
 
     #Now fit to the data
     callbacks = [tfmot.sparsity.keras.UpdatePruningStep(),
-                 EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, start_from_epoch=1),
-                 ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)]
+                 EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True, start_from_epoch=1),
+                 ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-5)]
 
     from tagger.train.weights import flatten_weights
     history = pruned_model.fit(

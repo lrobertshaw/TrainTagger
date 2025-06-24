@@ -11,8 +11,8 @@ from tensorflow.keras import layers as KL
 
 # Qkeras
 from qkeras.quantizers import quantized_bits, quantized_relu
-from qkeras.qlayers import QDense, QActivation
-from qkeras import QConv1D
+from qkeras.qlayers import QDense, QActivation#, QBatchNormalization
+from qkeras import QConv1D, QBatchNormalization
 
 from tensorflow.keras.layers import BatchNormalization, Input, Dense, Activation, GlobalAveragePooling1D, GlobalMaxPooling1D, Flatten, Concatenate, Conv1D
 from keras import activations
@@ -72,7 +72,7 @@ def baseline(constituents_shape, jets_shape=None):
     return model
 
 
-def qbaseline(constituents_shape, jets_shape=None, bits=32, bits_int=8, alpha_val=1):
+def qbaseline(constituents_shape, jets_shape=None, bits=9, bits_int=2, alpha_val="auto"):
     print('Using model: "quantised baseline"')
     common_args = {
         'kernel_quantizer': quantized_bits(bits, bits_int, alpha=alpha_val),
@@ -84,7 +84,7 @@ def qbaseline(constituents_shape, jets_shape=None, bits=32, bits_int=8, alpha_va
     constituent_input = tf.keras.layers.Input(shape=constituents_shape, name='constituent_inputs')
 
     #Main branch
-    main = BatchNormalization(name='norm_input')(constituent_input)
+    main = QBatchNormalization(name='norm_input')(constituent_input)
     
     #First Conv1D
     main = QConv1D(filters=10, kernel_size=1, name='Conv1D_1', **common_args)(main)
@@ -95,32 +95,23 @@ def qbaseline(constituents_shape, jets_shape=None, bits=32, bits_int=8, alpha_va
     main = QActivation(activation=quantized_relu(bits), name='relu_2')(main)
 
     # Linear activation to change HLS bitwidth to fix overflow in AveragePooling
-    main = QActivation(activation='quantized_bits(24,10)', name = 'act_pool')(main)
+    main = QActivation(activation='quantized_bits(18, 8)', name = 'act_pool')(main)
     main = GlobalAveragePooling1D(name='avgpool')(main)
-
-    inputs = {"constituent_inputs": constituent_input}
-    if jets_shape is not None:
-        print("Using jet features in the model!")
-        # If jet features are provided, concatenate them
-        jet_input = Input(shape=jets_shape, name='jet_inputs') # Shape is (n_jet_features,)
-        norm_jet_input = BatchNormalization(name='norm_jet_input')(jet_input)
-        main = Concatenate(name='combine_features')([main, norm_jet_input]) # Shape: (batch_size, 10 + n_jet_features)
-        inputs["jet_inputs"] = jet_input
 
     # pt regression branch
     pt_regress = QDense(10, name='Dense_1_pT', **common_args)(main)
     pt_regress = QActivation(activation=quantized_relu(bits), name='relu_1_pt')(pt_regress)
     pt_regress = QDense(1, name='pT_output',
-                        kernel_quantizer=quantized_bits(32, 10, alpha=alpha_val),
-                        bias_quantizer=quantized_bits(32, 10, alpha=alpha_val),
+                        kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
+                        bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
                         kernel_initializer='lecun_uniform')(pt_regress)
 
     # mass regression branch
     mass_regress = QDense(10, name='Dense_1_mass', **common_args)(main)
     mass_regress = QActivation(activation=quantized_relu(bits), name='relu_1_mass')(mass_regress)
     mass_regress = QDense(1, name='mass_output',
-                        kernel_quantizer=quantized_bits(32, 10, alpha=alpha_val),
-                        bias_quantizer=quantized_bits(32, 10, alpha=alpha_val),
+                        kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
+                        bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
                         kernel_initializer='lecun_uniform')(mass_regress)
 
     #Define the model using both branches
@@ -129,16 +120,6 @@ def qbaseline(constituents_shape, jets_shape=None, bits=32, bits_int=8, alpha_va
 
     return model
 
-
-def choose_aggregator(choice: str):
-    """Choose the aggregator keras object based on an input string."""
-    switcher = {
-        "mean": lambda: GlobalAveragePooling1D(),
-        "max": lambda: GlobalMaxPooling1D(),
-    }
-    agg = switcher.get(choice, lambda: None)()
-    if agg is None: raise ValueError()
-    return agg
 
 class NodeEdgeProjection(KL.Layer):
     """Layer that build the adjacency matrix for the interaction network graph.
