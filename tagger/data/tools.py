@@ -149,20 +149,24 @@ def _make_nn_inputs(data_split, tag, n_parts):
     features = _get_pfcand_fields(tag)
 
     #Concatenate all the inputs
-    inputs_list = []
+    constit_inputs_list, jet_inputs_list = [], []
 
     #Vertically stacked them to create input sets
     #https://awkward-array.org/doc/main/user-guide/how-to-restructure-concatenate.html
     #Also pad and fill them with 0 to the number of constituents we are using (nconstit)
     for field in features:
-        field_array = data_split["jet_pfcand"][field]
+        if field.split("_")[0] == "jet":
+            field_array = data_split[field]
+            jet_inputs_list.append(field_array[:, np.newaxis])
 
-        padded_filled_array = _pad_fill(field_array, n_parts)
-        inputs_list.append(padded_filled_array[:,:,np.newaxis])
+        else:
+            field_array = data_split["jet_pfcand"][field]
+            padded_filled_array = _pad_fill(field_array, n_parts)
+            constit_inputs_list.append(padded_filled_array[:, :, np.newaxis])
 
     #batch_size, n_particles, n_features
-    inputs = ak.concatenate(inputs_list, axis=2)
-    data_split['nn_inputs'] = inputs
+    data_split['nn_inputs'] = ak.concatenate(constit_inputs_list, axis=2)
+    data_split['nn_jet_inputs'] = ak.concatenate(jet_inputs_list, axis=1)
     
     return
 
@@ -211,7 +215,7 @@ def _process_chunk(data_split, tag, extras, n_parts, chunk, outdir):
     extra_features = _get_pfcand_fields(extras)
 
     #Save them to a root file
-    save_fields=['nn_inputs', 'class_label', 'target_pt', 'target_pt_phys'] + extra_features
+    save_fields=['nn_inputs', 'nn_jet_inputs', 'class_label', 'target_pt', 'target_pt_phys'] + extra_features
 
     # Filter the data_split to only include save_fields
     filtered_data = {field: data_split[field] for field in save_fields}
