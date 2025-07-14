@@ -186,6 +186,64 @@ def baseline_larger(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1,
     return baseline(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1, 
             aggregator = "mean",conv1d_layers = [30, 15, 10], class_layers = [32, 16, 8], reg_layers = [16, 8, 4])
 
+
+def baseline_with_jets(inputs_shape, output_shape, jets_shape=None, bits=9, bits_int=2, alpha_val=1, 
+             aggregator="mean", conv1d_layers=[10, 10], class_layers=[32, 16], reg_layers=[10]):
+
+    # Common quantization args
+    common_args = {
+        'kernel_quantizer': quantized_bits(bits, bits_int, alpha=alpha_val),
+        'bias_quantizer': quantized_bits(bits, bits_int, alpha=alpha_val),
+        'kernel_initializer': 'lecun_uniform',
+    }
+
+    # Inputs
+    constituent_inputs = tf.keras.layers.Input(shape=inputs_shape, name='constituent_inputs')
+    inputs = {"constituent_inputs": constituent_inputs}
+
+    # Main branch (constituent-based)
+    main = BatchNormalization(name='norm_input')(constituent_inputs)
+    for iconv1d, depthconv1d in enumerate(conv1d_layers):
+        main = QConv1D(filters=depthconv1d, kernel_size=1, name=f'Conv1D_{iconv1d+1}', **common_args)(main)
+        main = QActivation(activation=quantized_relu(bits, 0), name=f'relu_{iconv1d+1}')(main)
+
+    # Fix overflow in pooling
+    main = QActivation(activation='quantized_bits(18,8)', name='act_pool')(main)
+    agg = choose_aggregator(choice=aggregator, name="pool")
+    main = agg(main)
+
+    # Optional jet-level inputs
+    if jets_shape is not None:
+        jet_inputs = tf.keras.layers.Input(shape=jets_shape, name='jet_inputs')
+        jet_branch = BatchNormalization(name='norm_jet_input')(jet_inputs)
+        main = tf.keras.layers.Concatenate(name='combine_features')([main, jet_branch])
+        inputs.append(jet_inputs)
+
+    # Jet ID classification
+    jet_id = main
+    for iclass, depthclass in enumerate(class_layers):
+        jet_id = QDense(depthclass, name=f'Dense_{iclass+1}_jetID', **common_args)(jet_id)
+        jet_id = QActivation(activation=quantized_relu(bits, 0), name=f'relu_{iclass+1}_jetID')(jet_id)
+
+    jet_id = QDense(output_shape[0], name=f'Dense_{len(class_layers)+1}_jetID', **common_args)(jet_id)
+    jet_id = Activation('softmax', name='jet_id_output')(jet_id)
+
+    # pt regression
+    pt_regress = main
+    for ireg, depthreg in enumerate(reg_layers):
+        pt_regress = QDense(depthreg, name=f'Dense_{ireg+1}_pT', **common_args)(pt_regress)
+        pt_regress = QActivation(activation=quantized_relu(bits, 0), name=f'relu_{ireg+1}_pT')(pt_regress)
+
+    pt_regress = QDense(1, name='pT_output',
+                        kernel_quantizer=quantized_bits(16, 6, alpha=alpha_val),
+                        bias_quantizer=quantized_bits(16, 6, alpha=alpha_val),
+                        kernel_initializer='lecun_uniform')(pt_regress)
+
+    # Final model
+    model = tf.keras.Model(inputs=inputs, outputs=[jet_id, pt_regress])
+    print(model.summary())
+    return model
+
 # DeepSet model w/ attention pooling
 def DeepSetAttPool(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1, 
             aggregator = "mean",
