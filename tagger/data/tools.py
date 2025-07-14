@@ -291,7 +291,7 @@ def to_ML(data, class_labels):
     Take in the data from make_data (loaded by load_data) and make them ready for training.
     """
 
-    X = np.asarray(data['nn_inputs'], data['nn_jet_inputs'])
+    X = ( np.asarray( data['nn_inputs'] ), np.asarray( data['nn_jet_inputs'] ) )
     y = tf.keras.utils.to_categorical(np.asarray(data['class_label']), num_classes=len(class_labels))
     pt_target = np.asarray(data['target_pt'])
     truth_pt = np.asarray(data['target_pt_phys'])

@@ -201,7 +201,7 @@ def baseline_with_jets(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val
 
     # Inputs
     constituent_inputs = tf.keras.layers.Input(shape=constituents_shape, name='model_input')
-    inputs = {"model_inputs": constituent_inputs}
+    inputs = {"model_input": constituent_inputs}
 
     # Main branch (constituent-based)
     main = BatchNormalization(name='norm_input')(constituent_inputs)
@@ -227,7 +227,7 @@ def baseline_with_jets(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val
         jet_inputs_combined = tf.keras.layers.Concatenate(name='recombine_jet_inputs')([jet_pt_input, jet_other_inputs_norm])
 
         main = tf.keras.layers.Concatenate(name='combine_features')([main, jet_inputs_combined])
-        inputs.append(jet_inputs)
+        inputs["jet_input"] = jet_inputs
 
         # jet_inputs = tf.keras.layers.Input(shape=jets_shape, name='jet_input')
         # jet_branch = BatchNormalization(name='norm_jet_input')(jet_inputs)
