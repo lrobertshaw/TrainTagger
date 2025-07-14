@@ -171,7 +171,7 @@ def train_weights(y_train, reco_pt_train, class_labels, weightingMethod = WEIGHT
     else:
         return sample_weights
 
-def train(out_dir, percent, model_name, new_epochs = None):
+def train(out_dir, percent, model_name, new_epochs = None, use_jets = False):
 
     # Remove output dir if exists
     if os.path.exists(out_dir):
@@ -214,8 +214,16 @@ def train(out_dir, percent, model_name, new_epochs = None):
         print (sample_weight)
 
     # Get input shape
-    input_shape = X_train.shape[1:] # First dimension is batch size
     output_shape = y_train.shape[1:]
+
+    X_train_constits, X_train_jets = X_train
+    if use_jets:
+        # X_train_constits, X_train_jets = X_train
+        inputs =  {'model_input': X_train_constits, 'jet_input': X_train_jets}
+        input_shape = (X_train_constits.shape[1:], X_train_jets.shape[1:])
+    else:
+        inputs =  {'model_input': X_train_constits}
+        input_shape = X_train_constits[1:]
 
     # Dynamically get the model
     try:
@@ -233,15 +241,17 @@ def train(out_dir, percent, model_name, new_epochs = None):
                  EarlyStopping(monitor='val_loss', patience=10),
                  ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=15, min_lr=1e-5)]
 
-    history = pruned_model.fit({'model_input': X_train},
-                            {'prune_low_magnitude_jet_id_output': y_train, 'prune_low_magnitude_pT_output': pt_target_train},
-                            sample_weight=sample_weight,
-                            epochs=EPOCHS,
-                            batch_size=BATCH_SIZE,
-                            verbose=2,
-                            validation_split=VALIDATION_SPLIT,
-                            callbacks = [callbacks],
-                            shuffle=True)
+    history = pruned_model.fit(
+        inputs,
+        {'prune_low_magnitude_jet_id_output': y_train, 'prune_low_magnitude_pT_output': pt_target_train},
+        sample_weight=sample_weight,
+        epochs=EPOCHS,
+        batch_size=BATCH_SIZE,
+        verbose=2,
+        validation_split=VALIDATION_SPLIT,
+        callbacks = [callbacks],
+        shuffle=True
+        )
     
     # Export the model
     model_export = tfmot.sparsity.keras.strip_pruning(pruned_model)
@@ -276,6 +286,7 @@ if __name__ == "__main__":
     parser.add_argument('-m','--model', default='baseline', help = 'Model object name to train on')
     parser.add_argument('-n','--name', default='baseline', help = 'Model experiment name')
     parser.add_argument('-t','--tree', default='outnano/Jets', help = 'Tree within the ntuple containing the jets')
+    parser.add_argument('--use-jets', action='store_true', help='Tell model if to use jet-level features')
 
     # Basic ploting
     parser.add_argument('--plot-basic', action='store_true', help='Plot all the basic performance if set')
@@ -318,7 +329,7 @@ if __name__ == "__main__":
         with mlflow.start_run(run_name=args.name) as run:
             mlflow.set_tag('gitlab.CI_JOB_ID', os.getenv('CI_JOB_ID'))
             mlflow.keras.autolog()
-            train(args.output, args.percent, model_name=args.model)
+            train(args.output, args.percent, model_name=args.model, use_jets=args.use_jets)
             run_id = run.info.run_id
         sourceFile = open('mlflow_run_id.txt', 'w')
         print(run_id, end="", file = sourceFile)

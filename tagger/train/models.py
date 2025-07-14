@@ -187,7 +187,7 @@ def baseline_larger(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1,
             aggregator = "mean",conv1d_layers = [30, 15, 10], class_layers = [32, 16, 8], reg_layers = [16, 8, 4])
 
 
-def baseline_with_jets(inputs_shape, output_shape, jets_shape=None, bits=9, bits_int=2, alpha_val=1, 
+def baseline_with_jets(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1, 
              aggregator="mean", conv1d_layers=[10, 10], class_layers=[32, 16], reg_layers=[10]):
 
     # Common quantization args
@@ -196,10 +196,11 @@ def baseline_with_jets(inputs_shape, output_shape, jets_shape=None, bits=9, bits
         'bias_quantizer': quantized_bits(bits, bits_int, alpha=alpha_val),
         'kernel_initializer': 'lecun_uniform',
     }
+    constituents_shape, jets_shape = inputs_shape
 
     # Inputs
-    constituent_inputs = tf.keras.layers.Input(shape=inputs_shape, name='constituent_inputs')
-    inputs = {"constituent_inputs": constituent_inputs}
+    constituent_inputs = tf.keras.layers.Input(shape=constituents_shape, name='model_input')
+    inputs = {"model_inputs": constituent_inputs}
 
     # Main branch (constituent-based)
     main = BatchNormalization(name='norm_input')(constituent_inputs)
@@ -214,7 +215,7 @@ def baseline_with_jets(inputs_shape, output_shape, jets_shape=None, bits=9, bits
 
     # Optional jet-level inputs
     if jets_shape is not None:
-        jet_inputs = tf.keras.layers.Input(shape=jets_shape, name='jet_inputs')
+        jet_inputs = tf.keras.layers.Input(shape=jets_shape, name='jet_input')
         jet_branch = BatchNormalization(name='norm_jet_input')(jet_inputs)
         main = tf.keras.layers.Concatenate(name='combine_features')([main, jet_branch])
         inputs.append(jet_inputs)
