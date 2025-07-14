@@ -336,6 +336,3 @@ if __name__ == "__main__":
         sourceFile = open('mlflow_run_id.txt', 'w')
         print(run_id, end="", file = sourceFile)
         sourceFile.close()
-
-
-

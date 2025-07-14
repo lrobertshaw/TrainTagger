@@ -190,6 +190,7 @@ def baseline_larger(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1,
 def baseline_with_jets(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val=1, 
              aggregator="mean", conv1d_layers=[10, 10], class_layers=[32, 16], reg_layers=[10]):
 
+    from tensorflow.keras.constraints import NonNeg
     # Common quantization args
     common_args = {
         'kernel_quantizer': quantized_bits(bits, bits_int, alpha=alpha_val),
@@ -216,17 +217,42 @@ def baseline_with_jets(inputs_shape, output_shape, bits=9, bits_int=2, alpha_val
     # Optional jet-level inputs
     if jets_shape is not None:
         jet_inputs = tf.keras.layers.Input(shape=jets_shape, name='jet_input')
-        jet_branch = BatchNormalization(name='norm_jet_input')(jet_inputs)
-        main = tf.keras.layers.Concatenate(name='combine_features')([main, jet_branch])
+        jet_pt_input = tf.keras.layers.Lambda(lambda x: x[:, 0:1], name='jet_pt_input')(jet_inputs)  # Assume pt is at index 0
+        jet_other_inputs = tf.keras.layers.Lambda(lambda x: x[:, 1:], name='jet_other_inputs')(jet_inputs)
+
+        # Normalize only the other jet inputs
+        jet_other_inputs_norm = BatchNormalization(name='norm_jet_other_input')(jet_other_inputs)
+
+        # Concatenate jet pt with normalized other inputs
+        jet_inputs_combined = tf.keras.layers.Concatenate(name='recombine_jet_inputs')([jet_pt_input, jet_other_inputs_norm])
+
+        main = tf.keras.layers.Concatenate(name='combine_features')([main, jet_inputs_combined])
         inputs.append(jet_inputs)
+
+        # jet_inputs = tf.keras.layers.Input(shape=jets_shape, name='jet_input')
+        # jet_branch = BatchNormalization(name='norm_jet_input')(jet_inputs)
+        # main = tf.keras.layers.Concatenate(name='combine_features')([main, jet_branch])
+        # inputs.append(jet_inputs)
 
     # Jet ID classification
     jet_id = main
     for iclass, depthclass in enumerate(class_layers):
-        jet_id = QDense(depthclass, name=f'Dense_{iclass+1}_jetID', **common_args)(jet_id)
+        jet_id = QDense(
+            depthclass,
+            name=f'Dense_{iclass+1}_jetID',
+            kernel_constraint=NonNeg(),
+            bias_constraint=NonNeg(),
+            **common_args
+            )(jet_id)
         jet_id = QActivation(activation=quantized_relu(bits, 0), name=f'relu_{iclass+1}_jetID')(jet_id)
 
-    jet_id = QDense(output_shape[0], name=f'Dense_{len(class_layers)+1}_jetID', **common_args)(jet_id)
+    jet_id = QDense(
+        output_shape[0],
+        name=f'Dense_{len(class_layers)+1}_jetID',
+        kernel_constraint=NonNeg(),
+        bias_constraint=NonNeg(),
+        **common_args
+        )(jet_id)
     jet_id = Activation('softmax', name='jet_id_output')(jet_id)
 
     # pt regression

@@ -669,8 +669,11 @@ def filter_process(test_data, process_dir):
     Filter jets from specific signal process to create plots for specified signal processes.
     Comparison done through concatenation of sets to be compared and np unique to check for duplicates.
     """
+
     train, test, class_labels = load_data(os.path.join("signal_process_data", process_dir), percentage=100)[:3]
     train, test = to_ML(train, class_labels), to_ML(test, class_labels)
+
+    test_data, test_data_jets = test_data
 
     # apply unique to sets to be compared, since there tend to be duplicates
     process_data = np.unique(np.concatenate((train[0], test[0]), axis=0), axis=0)
@@ -695,7 +698,7 @@ def process_labels(process_key):
     return processes[process_key]
 
 # <<<<<<<<<<<<<<<<< end of plotting functions, call basic to plot all of them
-def basic(model_dir,signal_dirs) :
+def basic(model_dir, signal_dirs) :
     """
     Plot the basic ROCs for different classes. Does not reflect L1 rate
     Returns a dictionary of ROCs for each class
@@ -710,7 +713,8 @@ def basic(model_dir,signal_dirs) :
     ROC_dict = {class_label : 0 for class_label in class_labels}
 
     #Load the testing data
-    X_test = np.load(f"{model_dir}/testing_data/X_test.npy")
+    X_test_constits = np.load(f"{model_dir}/testing_data/X_test_constits.npy")
+    X_test_jets = np.load(f"{model_dir}/testing_data/X_test_jets.npy")
     y_test = np.load(f"{model_dir}/testing_data/y_test.npy")
     truth_pt_test = np.load(f"{model_dir}/testing_data/truth_pt_test.npy")
     reco_pt_test = np.load(f"{model_dir}/testing_data/reco_pt_test.npy")
@@ -724,14 +728,15 @@ def basic(model_dir,signal_dirs) :
 
     #Load model
     model = load_qmodel(f"{model_dir}/model/saved_model.h5", custom_objects=custom_objects_)
-    model_outputs = model.predict(X_test)
+    try: model_outputs = model.predict( (X_test_constits, X_test_jets) )
+    except: model_outputs = model.predict( X_test_constits )
 
     #Get classification outputs
     y_pred = model_outputs[0]
     pt_ratio = model_outputs[1].flatten()
 
     #Plot ROC curves
-    ROC_dict = ROC(y_pred, y_test, class_labels, plot_dir,ROC_dict)
+    ROC_dict = ROC(y_pred, y_test, class_labels, plot_dir, ROC_dict)
     class_pairs = []
     #Generate all possible pairs of classes
     for i in class_labels.keys():
@@ -749,7 +754,7 @@ def basic(model_dir,signal_dirs) :
             y_p, y_t = y_pred, y_test
             process_label = None
         else:
-            signal_indices, sample_train, sample_test = filter_process(X_test, signal_dirs[i])
+            signal_indices, sample_train, sample_test = filter_process((X_test_constits, X_test_jets), signal_dirs[i])
             sample_data = np.concatenate((sample_train[0], sample_test[0]), axis=0)
             sample_labels = np.concatenate((sample_train[1], sample_test[1]), axis=0)
             sample_preds = model.predict(sample_data)[0]
