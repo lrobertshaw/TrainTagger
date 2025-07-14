@@ -67,7 +67,8 @@ def save_test_data(out_dir, X_test, y_test, truth_pt_test, reco_pt_test, class_l
 
     os.makedirs(os.path.join(out_dir,'testing_data'), exist_ok=True)
 
-    np.save(os.path.join(out_dir, "testing_data/X_test.npy"), X_test)
+    np.save(os.path.join(out_dir, "testing_data/X_test_constits.npy"), X_test[0])
+    np.save(os.path.join(out_dir, "testing_data/X_test_jets.npy"), X_test[1])
     np.save(os.path.join(out_dir, "testing_data/y_test.npy"), y_test)
     np.save(os.path.join(out_dir, "testing_data/truth_pt_test.npy"), truth_pt_test)
     np.save(os.path.join(out_dir, "testing_data/reco_pt_test.npy"), reco_pt_test)
@@ -197,6 +198,7 @@ def train(out_dir, percent, model_name, new_epochs = None, use_jets = False):
         "loss_weights": LOSS_WEIGHTS,
         "percent": percent,
         "weighting": WEIGHT_METHOD,
+        "use_jets": use_jets,
     }
     with open(os.path.join(out_dir, "model_metadata.json"), "w") as f: json.dump(model_metadata, f, indent=4) #Dump model variables
 
